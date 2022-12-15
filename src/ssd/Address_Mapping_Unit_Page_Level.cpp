@@ -391,14 +391,28 @@ namespace SSD_Components
 			delete[] die_ids;
 			delete[] plane_ids;
 		}
+
+		//** Append for Dedupe
+		std::string fp_input_file_path = "C:\\Users\\USER\\Desktop\\dedup50perc.txt";
+		fp_input_file.open(fp_input_file_path);//** append
+		Total_fp = 0;
+		while (std::getline(fp_input_file, cur_fp))
+			Total_fp++;
+		fp_input_file.close();
+		fp_input_file.open(fp_input_file_path);
+		Total_write_page_no = 0;
+		Fully_write_page_no = 0;
 	}
 
 	Address_Mapping_Unit_Page_Level::~Address_Mapping_Unit_Page_Level()
 	{
+		std::cout << "Total fingerprints num: " << Total_fp << std::endl;
+		std::cout << Total_write_page_no << " " << Fully_write_page_no << std::endl;
 		for (unsigned int i = 0; i < no_of_input_streams; i++) {
 			delete domains[i];
 		}
 		delete[] domains;
+		fp_input_file.close();//** Append
 	}
 
 	void Address_Mapping_Unit_Page_Level::Setup_triggers()
@@ -1193,6 +1207,14 @@ namespace SSD_Components
 		transaction->PPA = Convert_address_to_ppa(transaction->Address);
 		domain->Update_mapping_info(ideal_mapping_table, transaction->Stream_id, transaction->LPA, transaction->PPA,
 			((NVM_Transaction_Flash_WR*)transaction)->write_sectors_bitmap | domain->Get_page_status(ideal_mapping_table, transaction->Stream_id, transaction->LPA));
+		
+		//** Append for Dedupe
+		Total_write_page_no++;
+		if (domain->Get_page_status(ideal_mapping_table, transaction->Stream_id, transaction->LPA) == pow(2, sector_no_per_page) - 1)
+		{
+			Fully_write_page_no++;
+			std::cout << "LPA: " << transaction->LPA << ", bitmap: " << domain->Get_page_status(ideal_mapping_table, transaction->Stream_id, transaction->LPA) << std::endl;
+		}
 	}
 
 	void Address_Mapping_Unit_Page_Level::allocate_plane_for_translation_write(NVM_Transaction_Flash* transaction)

@@ -167,6 +167,14 @@ namespace SSD_Components
 		void Remove_barrier_for_accessing_lpa(stream_id_type stream_id, LPA_type lpa);
 		void Remove_barrier_for_accessing_mvpn(stream_id_type stream_id, MVPN_type mpvn);
 		void Start_servicing_writes_for_overfull_plane(const NVM::FlashMemory::Physical_Page_Address plane_address);
+
+		//** Append for Dedupe
+		std::ifstream fp_input_file;//** append for CAFTL fp input
+		std::string cur_fp;//** record current fp
+		size_t Total_fp;//** Total number of fingerprints
+		size_t Total_write_page_no;
+		size_t Fully_write_page_no;//** Not including partial write
+		
 	private:
 		static Address_Mapping_Unit_Page_Level* _my_instance;
 		unsigned int cmt_capacity;
