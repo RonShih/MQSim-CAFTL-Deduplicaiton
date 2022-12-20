@@ -1196,6 +1196,18 @@ namespace SSD_Components
 			}
 		}
 
+
+		//** Modified for Dedupe
+		page_status_type cur_bitmap = ((NVM_Transaction_Flash_WR*)transaction)->write_sectors_bitmap | domain->Get_page_status(ideal_mapping_table, transaction->Stream_id, transaction->LPA);
+		if (cur_bitmap == pow(2, sector_no_per_page) - 1)//Fetch a fingerprint
+		{
+			Fully_write_page_no++;
+			std::cout << "LPA: " << transaction->LPA << ", bitmap: " << domain->Get_page_status(ideal_mapping_table, transaction->Stream_id, transaction->LPA) << std::endl;
+		}
+		//**
+
+		//讀一行fp後插入至hash table，如果發生miss則進來
+		//(1)hash table建立 (2)PPN->VPN (3)VPN-to-PPN mapping
 		/*The following lines should not be ordered with respect to the block_manager->Invalidate_page_in_block
 		* function call in the above code blocks. Otherwise, GC may be invoked (due to the call to Allocate_block_....) and
 		* may decide to move a page that is just invalidated.*/
@@ -1204,17 +1216,30 @@ namespace SSD_Components
 		} else {
 			block_manager->Allocate_block_and_page_in_plane_for_user_write(transaction->Stream_id, transaction->Address);
 		}
+
 		transaction->PPA = Convert_address_to_ppa(transaction->Address);
 		domain->Update_mapping_info(ideal_mapping_table, transaction->Stream_id, transaction->LPA, transaction->PPA,
 			((NVM_Transaction_Flash_WR*)transaction)->write_sectors_bitmap | domain->Get_page_status(ideal_mapping_table, transaction->Stream_id, transaction->LPA));
 		
 		//** Append for Dedupe
 		Total_write_page_no++;
-		if (domain->Get_page_status(ideal_mapping_table, transaction->Stream_id, transaction->LPA) == pow(2, sector_no_per_page) - 1)
-		{
-			Fully_write_page_no++;
-			std::cout << "LPA: " << transaction->LPA << ", bitmap: " << domain->Get_page_status(ideal_mapping_table, transaction->Stream_id, transaction->LPA) << std::endl;
+		//**
+
+		/*The following lines should not be ordered with respect to the block_manager->Invalidate_page_in_block
+		* function call in the above code blocks. Otherwise, GC may be invoked (due to the call to Allocate_block_....) and
+		* may decide to move a page that is just invalidated.*/
+		/*
+		if (is_for_gc) {
+			block_manager->Allocate_block_and_page_in_plane_for_gc_write(transaction->Stream_id, transaction->Address);
 		}
+		else {
+			block_manager->Allocate_block_and_page_in_plane_for_user_write(transaction->Stream_id, transaction->Address);
+		}
+
+		transaction->PPA = Convert_address_to_ppa(transaction->Address);
+		domain->Update_mapping_info(ideal_mapping_table, transaction->Stream_id, transaction->LPA, transaction->PPA,
+			((NVM_Transaction_Flash_WR*)transaction)->write_sectors_bitmap | domain->Get_page_status(ideal_mapping_table, transaction->Stream_id, transaction->LPA));
+		*/
 	}
 
 	void Address_Mapping_Unit_Page_Level::allocate_plane_for_translation_write(NVM_Transaction_Flash* transaction)
