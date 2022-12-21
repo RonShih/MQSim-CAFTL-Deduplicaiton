@@ -393,21 +393,23 @@ namespace SSD_Components
 		}
 
 		//** Append for Dedupe
-		std::string fp_input_file_path = "C:\\Users\\USER\\Desktop\\dedup50perc.txt";
+		std::string fp_input_file_path = "C:\\Users\\Ron\\Desktop\\dr_66perc.txt";
 		fp_input_file.open(fp_input_file_path);//** append
-		Total_fp = 0;
+		Total_fp_no = 0;
 		while (std::getline(fp_input_file, cur_fp))
-			Total_fp++;
+			Total_fp_no++;
 		fp_input_file.close();
 		fp_input_file.open(fp_input_file_path);
+		Write_with_fp_no = 0;
 		Total_write_page_no = 0;
-		Fully_write_page_no = 0;
+		Full_write_page_no = 0;
 	}
 
 	Address_Mapping_Unit_Page_Level::~Address_Mapping_Unit_Page_Level()
 	{
-		std::cout << "Total fingerprints num: " << Total_fp << std::endl;
-		std::cout << Total_write_page_no << " " << Fully_write_page_no << std::endl;
+		std::cout << "Total fingerprints num: " << Total_fp_no << std::endl;
+		std::cout << "Total page write num (partial or full): " << Total_write_page_no << std::endl; 
+		std::cout << "Full page write num: " << Full_write_page_no << std::endl;
 		for (unsigned int i = 0; i < no_of_input_streams; i++) {
 			delete domains[i];
 		}
@@ -536,12 +538,11 @@ namespace SSD_Components
 				Stats::total_readTR_CMT_queries++;
 				Stats::readTR_CMT_hits_per_stream[stream_id]++;
 				Stats::readTR_CMT_hits++;
-			} else {
-				//This is a write transaction
+			} else {//This is a write transaction		
 				Stats::total_writeTR_CMT_queries++;
 				Stats::total_writeTR_CMT_queries_per_stream[stream_id]++;
 				Stats::writeTR_CMT_hits++;
-				Stats::writeTR_CMT_hits_per_stream[stream_id]++;
+				Stats::writeTR_CMT_hits_per_stream[stream_id]++;	
 			}
 
 			if (translate_lpa_to_ppa(stream_id, transaction)) {
@@ -1196,18 +1197,28 @@ namespace SSD_Components
 			}
 		}
 
-
-		//** Modified for Dedupe
+		//** Modified for CAFTL
+		//(1)hash table initialization (2)PPN->VPN (3)VPN-to-PPN mapping
 		page_status_type cur_bitmap = ((NVM_Transaction_Flash_WR*)transaction)->write_sectors_bitmap | domain->Get_page_status(ideal_mapping_table, transaction->Stream_id, transaction->LPA);
-		if (cur_bitmap == pow(2, sector_no_per_page) - 1)//Fetch a fingerprint
+		if (cur_bitmap == pow(2, sector_no_per_page) - 1)//If it is a full page write
 		{
-			Fully_write_page_no++;
-			std::cout << "LPA: " << transaction->LPA << ", bitmap: " << domain->Get_page_status(ideal_mapping_table, transaction->Stream_id, transaction->LPA) << std::endl;
+			if (!fp_input_file.is_open())
+			{
+				PRINT_ERROR("Fail to open fingerprint input!");
+				return;
+			}
+			cur_fp.clear();
+			if (std::getline(fp_input_file, cur_fp))
+			{
+				std::cout << "LPA: " << transaction->LPA << ", bitmap: " << domain->Get_page_status(ideal_mapping_table, transaction->Stream_id, transaction->LPA) << std::endl;
+				Write_with_fp_no++;
+				std::cout << cur_fp << std::endl;
+			}
+			Full_write_page_no++;
 		}
 		//**
 
-		//讀一行fp後插入至hash table，如果發生miss則進來
-		//(1)hash table建立 (2)PPN->VPN (3)VPN-to-PPN mapping
+		
 		/*The following lines should not be ordered with respect to the block_manager->Invalidate_page_in_block
 		* function call in the above code blocks. Otherwise, GC may be invoked (due to the call to Allocate_block_....) and
 		* may decide to move a page that is just invalidated.*/
@@ -1218,12 +1229,9 @@ namespace SSD_Components
 		}
 
 		transaction->PPA = Convert_address_to_ppa(transaction->Address);
-		domain->Update_mapping_info(ideal_mapping_table, transaction->Stream_id, transaction->LPA, transaction->PPA,
-			((NVM_Transaction_Flash_WR*)transaction)->write_sectors_bitmap | domain->Get_page_status(ideal_mapping_table, transaction->Stream_id, transaction->LPA));
-		
-		//** Append for Dedupe
+		domain->Update_mapping_info(ideal_mapping_table, transaction->Stream_id, transaction->LPA, transaction->PPA, cur_bitmap);
+
 		Total_write_page_no++;
-		//**
 
 		/*The following lines should not be ordered with respect to the block_manager->Invalidate_page_in_block
 		* function call in the above code blocks. Otherwise, GC may be invoked (due to the call to Allocate_block_....) and

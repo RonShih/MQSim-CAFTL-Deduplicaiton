@@ -169,11 +169,12 @@ namespace SSD_Components
 		void Start_servicing_writes_for_overfull_plane(const NVM::FlashMemory::Physical_Page_Address plane_address);
 
 		//** Append for Dedupe
-		std::ifstream fp_input_file;//** append for CAFTL fp input
-		std::string cur_fp;//** record current fp
-		size_t Total_fp;//** Total number of fingerprints
-		size_t Total_write_page_no;
-		size_t Fully_write_page_no;//** Not including partial write
+		std::ifstream fp_input_file;//** Append for CAFTL fp input
+		std::string cur_fp;//** Record current fp
+		size_t Write_with_fp_no;
+		size_t Total_fp_no;//** Total number of fingerprints
+		size_t Total_write_page_no;//** Including partial and full write
+		size_t Full_write_page_no;//** Not including partial write
 		
 	private:
 		static Address_Mapping_Unit_Page_Level* _my_instance;
