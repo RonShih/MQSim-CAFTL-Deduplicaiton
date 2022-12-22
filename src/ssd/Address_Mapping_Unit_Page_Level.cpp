@@ -1,7 +1,8 @@
 #include <cmath>
 #include <assert.h>
 #include <stdexcept>
-
+#include <unordered_map>//** Append for CAFTL
+#include <utility>//** Append for CAFTL
 #include "Address_Mapping_Unit_Page_Level.h"
 #include "Stats.h"
 #include "../utils/Logical_Address_Partitioning_Unit.h"
@@ -219,6 +220,19 @@ namespace SSD_Components
 			GlobalTranslationDirectory[i].MPPN = (MPPN_type)NO_MPPN;
 			GlobalTranslationDirectory[i].TimeStamp = INVALID_TIME_STAMP;
 		}
+
+		//** Append for Dedupe
+		deduplicator = new Deduplicator();
+		std::string fp_input_file_path = "C:\\Users\\USER\\Desktop\\dedup50perc.txt";
+		fp_input_file.open(fp_input_file_path);//** append
+		Total_fp_no = 0;
+		while (std::getline(fp_input_file, cur_fp))
+			Total_fp_no++;
+		fp_input_file.close();
+		fp_input_file.open(fp_input_file_path);
+		Write_with_fp_no = 0;
+		Total_write_page_no = 0;
+		Full_write_page_no = 0;
 	}
 
 	AddressMappingDomain::~AddressMappingDomain()
@@ -243,6 +257,14 @@ namespace SSD_Components
 		delete[] Chip_ids;
 		delete[] Die_ids;
 		delete[] Plane_ids;
+
+		//** Append for Dedupe
+		std::cout << "Total fingerprints num: " << Total_fp_no << std::endl;
+		std::cout << "Total page write num (partial or full): " << Total_write_page_no << std::endl;
+		std::cout << "Full page write num: " << Full_write_page_no << std::endl;
+		fp_input_file.close();
+		delete deduplicator;
+		//**
 	}
 
 	inline void AddressMappingDomain::Update_mapping_info(const bool ideal_mapping, const stream_id_type stream_id, const LPA_type lpa, const PPA_type ppa, const page_status_type page_status_bitmap)
@@ -392,29 +414,15 @@ namespace SSD_Components
 			delete[] plane_ids;
 		}
 
-		//** Append for Dedupe
-		std::string fp_input_file_path = "C:\\Users\\Ron\\Desktop\\dr_66perc.txt";
-		fp_input_file.open(fp_input_file_path);//** append
-		Total_fp_no = 0;
-		while (std::getline(fp_input_file, cur_fp))
-			Total_fp_no++;
-		fp_input_file.close();
-		fp_input_file.open(fp_input_file_path);
-		Write_with_fp_no = 0;
-		Total_write_page_no = 0;
-		Full_write_page_no = 0;
+		
 	}
 
 	Address_Mapping_Unit_Page_Level::~Address_Mapping_Unit_Page_Level()
-	{
-		std::cout << "Total fingerprints num: " << Total_fp_no << std::endl;
-		std::cout << "Total page write num (partial or full): " << Total_write_page_no << std::endl; 
-		std::cout << "Full page write num: " << Full_write_page_no << std::endl;
+	{		
 		for (unsigned int i = 0; i < no_of_input_streams; i++) {
 			delete domains[i];
 		}
 		delete[] domains;
-		fp_input_file.close();//** Append
 	}
 
 	void Address_Mapping_Unit_Page_Level::Setup_triggers()
@@ -1202,36 +1210,53 @@ namespace SSD_Components
 		page_status_type cur_bitmap = ((NVM_Transaction_Flash_WR*)transaction)->write_sectors_bitmap | domain->Get_page_status(ideal_mapping_table, transaction->Stream_id, transaction->LPA);
 		if (cur_bitmap == pow(2, sector_no_per_page) - 1)//If it is a full page write
 		{
-			if (!fp_input_file.is_open())
+			if (!domain->fp_input_file.is_open())
 			{
 				PRINT_ERROR("Fail to open fingerprint input!");
 				return;
 			}
-			cur_fp.clear();
-			if (std::getline(fp_input_file, cur_fp))
+			if (std::getline(domain->fp_input_file, domain->cur_fp))
 			{
-				std::cout << "LPA: " << transaction->LPA << ", bitmap: " << domain->Get_page_status(ideal_mapping_table, transaction->Stream_id, transaction->LPA) << std::endl;
-				Write_with_fp_no++;
-				std::cout << cur_fp << std::endl;
+				std::cout << "\nRead trace line no: " << domain->Write_with_fp_no << ", FP: " << domain->cur_fp << std::endl;
+				if (!domain->deduplicator->Exist(domain->cur_fp))//first time insertion
+				{
+					/*The following lines should not be ordered with respect to the block_manager->Invalidate_page_in_block
+					* function call in the above code blocks. Otherwise, GC may be invoked (due to the call to Allocate_block_....) and
+					* may decide to move a page that is just invalidated.*/
+					if (is_for_gc) {
+						block_manager->Allocate_block_and_page_in_plane_for_gc_write(transaction->Stream_id, transaction->Address);
+					}
+					else {
+						block_manager->Allocate_block_and_page_in_plane_for_user_write(transaction->Stream_id, transaction->Address);
+					}
+					transaction->PPA = Convert_address_to_ppa(transaction->Address);
+
+					Chunk cur_chunk = { domain->cur_fp, 1, transaction->PPA };//FP, ref(duplicate count), unsigned int PPA
+					std::pair<std::string, Chunk> FP_entry (domain->cur_fp, cur_chunk);//Initialize this chunk
+					domain->deduplicator->Update(FP_entry);//Insert this FP entry
+				}
+				else//Duplication Happens
+				{
+					PPA_type VPA = domain->deduplicator->GetChunk(domain->cur_fp).PPA;
+					if(domain->deduplicator->GetChunk(domain->cur_fp).ref == 1)
+						VPA ^= (1ULL << (63));//convert PPA to VPA
+					size_t new_ref = domain->deduplicator->GetChunk(domain->cur_fp).ref + 1;//ref increases
+					Chunk cur_chunk = { domain->cur_fp, new_ref, VPA };
+					std::pair<std::string, Chunk> FP_entry(domain->cur_fp, cur_chunk);
+					domain->deduplicator->Update(FP_entry);//Update this FP entry
+					std::cout << "VPA: " << VPA << std::endl;
+				}
+				domain->deduplicator->Print_FPtable();
+				domain->Write_with_fp_no++;
+				//std::cout << "LPA: " << transaction->LPA << ", bitmap: " << cur_bitmap << std::endl;
+				//std::cout << domain->cur_fp << std::endl;
 			}
-			Full_write_page_no++;
+			domain->Full_write_page_no++;
 		}
-		//**
-
 		
-		/*The following lines should not be ordered with respect to the block_manager->Invalidate_page_in_block
-		* function call in the above code blocks. Otherwise, GC may be invoked (due to the call to Allocate_block_....) and
-		* may decide to move a page that is just invalidated.*/
-		if (is_for_gc) {
-			block_manager->Allocate_block_and_page_in_plane_for_gc_write(transaction->Stream_id, transaction->Address);
-		} else {
-			block_manager->Allocate_block_and_page_in_plane_for_user_write(transaction->Stream_id, transaction->Address);
-		}
-
-		transaction->PPA = Convert_address_to_ppa(transaction->Address);
 		domain->Update_mapping_info(ideal_mapping_table, transaction->Stream_id, transaction->LPA, transaction->PPA, cur_bitmap);
 
-		Total_write_page_no++;
+		domain->Total_write_page_no++;
 
 		/*The following lines should not be ordered with respect to the block_manager->Invalidate_page_in_block
 		* function call in the above code blocks. Otherwise, GC may be invoked (due to the call to Allocate_block_....) and
@@ -1249,6 +1274,44 @@ namespace SSD_Components
 			((NVM_Transaction_Flash_WR*)transaction)->write_sectors_bitmap | domain->Get_page_status(ideal_mapping_table, transaction->Stream_id, transaction->LPA));
 		*/
 	}
+
+	Deduplicator::Deduplicator() {}
+	Deduplicator::~Deduplicator() {}
+	void Deduplicator::Update(std::pair<std::string, Chunk> FP_entry)
+	{
+		std::unordered_map<std::string, Chunk>::iterator iter = FPtable.find(FP_entry.first);
+		if (iter != FPtable.end())//duplicate
+		{
+			iter->second.ref = FP_entry.second.ref;
+			iter->second.PPA = FP_entry.second.PPA;//if ref > 1, its VPA
+		}
+		else//unique
+		{
+			FPtable.insert(FP_entry);
+		}
+	}
+	void Deduplicator::Print_FPtable()
+	{
+		for (auto const &pair : FPtable) {
+			std::cout << "{" << pair.first << ": " << pair.second.ref << ", " << pair.second.PPA << "}\n";
+		}
+	}
+	bool Deduplicator::Exist(std::string FP)
+	{
+		std::unordered_map<std::string, Chunk>::const_iterator got = FPtable.find(FP);
+		if (got == FPtable.end())
+			return false;
+		else return true;
+	}
+
+	Chunk Deduplicator::GetChunk(std::string FP)
+	{
+		std::unordered_map<std::string, Chunk>::const_iterator got = FPtable.find(FP);
+		if (got == FPtable.end())
+			PRINT_ERROR("No Chunk in Fingerprint Table")
+		else 
+			return got->second;
+	} 
 
 	void Address_Mapping_Unit_Page_Level::allocate_plane_for_translation_write(NVM_Transaction_Flash* transaction)
 	{
