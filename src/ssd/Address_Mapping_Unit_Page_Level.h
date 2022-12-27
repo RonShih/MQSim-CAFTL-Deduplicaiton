@@ -41,11 +41,19 @@ namespace SSD_Components
 		data_timestamp_type TimeStamp;
 	};
 	
-	struct Chunk//** Append for CAFTL
+	//** GMT equals to Primary Mapping Table in CAFTL
+	//** CAFTL maintains SMT (Secondary Mapping Table) for VPN-to-PPN mapping
+	struct SMTEntryType//** Append for CAFTL
+	{
+		PPA_type PPA;
+	};
+
+	struct ChunkInfo//** Append for CAFTL
 	{
 		std::string FP;//fingerprint, i.e. SHA-1
 		size_t ref;//number of this chunk appear
 		PPA_type PPA;
+		LPA_type LPA;
 	};
 
 	class Deduplicator//** Append for CAFTL
@@ -53,13 +61,13 @@ namespace SSD_Components
 	public:
 		Deduplicator();
 		~Deduplicator();
-		void Update(std::pair<std::string, Chunk> FP_entry);
+		void Update_FPtable(std::pair<std::string, ChunkInfo> FP_entry);
 		void Print_FPtable();
 		bool Exist(std::string FP);//** Check if this FP exists in hash table
-		Chunk GetChunk(std::string FP);
+		ChunkInfo GetChunkInfo(std::string FP);
 		
 	private:
-		std::unordered_map<std::string, Chunk> FPtable;
+		std::unordered_map<std::string, ChunkInfo> FPtable;
 		size_t Total_chunk_no;
 		size_t Dup_chunk_no;
 		size_t Dedup_rate;
@@ -119,6 +127,7 @@ namespace SSD_Components
 		/*The logical to physical address mapping of all data pages that is implemented based on the DFTL (Gupta et al., ASPLOS 2009(
 		* proposal. It is always stored in non-volatile flash memory.*/
 		GMTEntryType* GlobalMappingTable;
+
 		void Update_mapping_info(const bool ideal_mapping, const stream_id_type stream_id, const LPA_type lpa, const PPA_type ppa, const page_status_type page_status_bitmap);
 		page_status_type Get_page_status(const bool ideal_mapping, const stream_id_type stream_id, const LPA_type lpa);
 		PPA_type Get_ppa(const bool ideal_mapping, const stream_id_type stream_id, const LPA_type lpa);
@@ -153,6 +162,10 @@ namespace SSD_Components
 
 		//** Append for CAFTL
 		Deduplicator *deduplicator;
+		std::map<PPA_type, SMTEntryType> SecondaryMappingTable;//** For CAFTL 2-level mapping while GMT as Primary Mapping Table in CAFTL. It should be inserted as pair <VPA, PPA>
+		void Update_SMT(const bool ideal_mapping, const stream_id_type stream_id, std::pair<PPA_type, SMTEntryType>);
+		void Print_PMT();
+		void Print_SMT();
 		std::ifstream fp_input_file;//** Append for CAFTL fp input
 		std::string cur_fp;//** Record current fp
 		size_t Write_with_fp_no;
