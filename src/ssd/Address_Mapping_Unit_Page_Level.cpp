@@ -1223,7 +1223,7 @@ namespace SSD_Components
 			if (std::getline(domain->fp_input_file, domain->cur_fp))//Make sure that fingerprints are sufficient for full page write trace
 			{
 				std::cout << "\nRead trace line no: " << domain->Write_with_fp_no << ", LPA: " << transaction->LPA << ", FP: " << domain->cur_fp << std::endl;
-				if (!domain->deduplicator->Exist(domain->cur_fp))//First time insertion
+				if (!domain->deduplicator->In_FPtable(domain->cur_fp))//First time insertion
 				{
 					/*The following lines should not be ordered with respect to the block_manager->Invalidate_page_in_block
 					* function call in the above code blocks. Otherwise, GC may be invoked (due to the call to Allocate_block_....) and
@@ -1238,14 +1238,14 @@ namespace SSD_Components
 					cur_chunk = { domain->cur_fp, 1, transaction->PPA, transaction->LPA};//Insert first chunk of this entry of hash table
 					domain->Update_mapping_info(ideal_mapping_table, transaction->Stream_id, transaction->LPA, cur_chunk.PPA, cur_bitmap);
 				}
-				else//Duplication Happens
+				else//Found duplication
 				{
 					size_t new_ref = domain->deduplicator->GetChunkInfo(domain->cur_fp).ref + 1;//With ref increases
 					PPA_type PPA = domain->deduplicator->GetChunkInfo(domain->cur_fp).PPA;//Get original PPA from FP table
 					cur_chunk = { domain->cur_fp, new_ref, PPA, transaction->LPA };//Update the chunk info to be inserted into hash table
 					VPA = PPA ^ (1ULL << (63));//Convert PPA to VPA
 					doneVPA = true;
-					if (new_ref > 1)//Convert PPA-to-VPA and chnage previous LPA-to-PPA mapping to LPA-to-VPA
+					if (new_ref > 1)//Convert PPA-to-VPA and change previous LPA-to-PPA mapping to LPA-to-VPA
 					{
 						LPA_type target_lpa = domain->deduplicator->GetChunkInfo(domain->cur_fp).LPA;//Get LPA from hash table
 						//If we get PPA from FP table, it triggers a read to get LPA from flash page metadata
@@ -1254,8 +1254,7 @@ namespace SSD_Components
 					}
 					domain->Update_mapping_info(ideal_mapping_table, transaction->Stream_id, transaction->LPA, VPA, cur_bitmap);//Map current LPA to VPA
 				}
-				FP_entry.first = domain->cur_fp;//Get hash code
-				FP_entry.second = cur_chunk;
+				FP_entry = { domain->cur_fp, cur_chunk };
 				domain->deduplicator->Update_FPtable(FP_entry);//If this FP entry already exists deduplicator updates ref and physical address, or it directly inserts into hash table.
 				domain->Write_with_fp_no++;
 
@@ -1296,7 +1295,7 @@ namespace SSD_Components
 		std::unordered_map<std::string, ChunkInfo>::iterator iter = FPtable.find(FP_entry.first);
 		if (iter != FPtable.end())//duplicate
 		{
-			iter->second.ref = FP_entry.second.PPA;
+			iter->second.PPA = FP_entry.second.PPA;
 			iter->second.ref = FP_entry.second.ref;
 			iter->second.LPA = FP_entry.second.LPA;//Record the newest version of LPA
 			//While it trigger GC, the oldest version LPA will be likely removed first.
@@ -1315,7 +1314,7 @@ namespace SSD_Components
 			std::cout << "{" << pair.first << ": " << pair.second.ref << ", " << pair.second.PPA << "}\n";
 		}
 	}
-	bool Deduplicator::Exist(std::string FP)
+	bool Deduplicator::In_FPtable(std::string FP)
 	{
 		std::unordered_map<std::string, ChunkInfo>::const_iterator got = FPtable.find(FP);
 		if (got == FPtable.end())

@@ -1,7 +1,7 @@
 ﻿  Address_Mapping_Unit_Page_Level.cpp
   正在產生程式碼
-  3 of 6284 functions (<0.1%) were compiled, the rest were copied from previous compilation.
-    0 functions were new in current compilation
-    86 functions had inline decision re-evaluated but remain unchanged
+  11 of 6288 functions ( 0.2%) were compiled, the rest were copied from previous compilation.
+    5 functions were new in current compilation
+    20 functions had inline decision re-evaluated but remain unchanged
   已完成程式碼產生
   MQSim.vcxproj -> C:\Users\Ron\Documents\GitHub\MQSim_CAFTL_v2\\MQSim.exe

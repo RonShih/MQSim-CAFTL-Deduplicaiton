@@ -63,7 +63,7 @@ namespace SSD_Components
 		~Deduplicator();
 		void Update_FPtable(std::pair<std::string, ChunkInfo> FP_entry);
 		void Print_FPtable();
-		bool Exist(std::string FP);//** Check if this FP exists in hash table
+		bool In_FPtable(std::string FP);//** Check if this FP exists in hash table
 		ChunkInfo GetChunkInfo(std::string FP);
 		
 	private:
