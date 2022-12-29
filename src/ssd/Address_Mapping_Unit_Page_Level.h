@@ -163,7 +163,6 @@ namespace SSD_Components
 		//** Append for CAFTL
 		Deduplicator *deduplicator;
 		std::map<PPA_type, SMTEntryType> SecondaryMappingTable;//** For CAFTL 2-level mapping while GMT as Primary Mapping Table in CAFTL. It should be inserted as pair <VPA, PPA>
-		void Update_SMT(const bool ideal_mapping, const stream_id_type stream_id, std::pair<PPA_type, SMTEntryType>);
 		void Print_PMT();
 		void Print_SMT();
 		std::ifstream fp_input_file;//** Append for CAFTL fp input

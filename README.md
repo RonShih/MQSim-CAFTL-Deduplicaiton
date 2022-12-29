@@ -1,5 +1,10 @@
 # MQSim: A Simulator for Modern NVMe and SATA SSDs
 
+## Notes for CAFTL over MQSim
+1. [MQSim閱讀筆記(1)](https://hackmd.io/GBxMOESKQJy-2hVTA84v7Q)
+2. [MQSim閱讀筆記(2)](https://hackmd.io/s3cwUIRJQV-C-xAtDoCBdQ)
+3. [MQSim閱讀筆記(3)](https://hackmd.io/Dx2lT7yjSs6fyPdSCDvDng)
+4. [CAFTL over MQSim](https://hackmd.io/znYzwCrqQyOyXoutBRSRvw?both)
 
 ## Usage in Linux
 Run following commands:

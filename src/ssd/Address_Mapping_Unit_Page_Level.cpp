@@ -224,7 +224,7 @@ namespace SSD_Components
 		//** Append for CAFTL
 		deduplicator = new Deduplicator();
 
-		std::string fp_input_file_path = "C:\\Users\\Ron\\Desktop\\dr_50perc.txt";
+		std::string fp_input_file_path = "C:\\Users\\USER\\Desktop\\dedup50perc.txt";
 		fp_input_file.open(fp_input_file_path);//** append
 		Total_fp_no = 0;
 		while (std::getline(fp_input_file, cur_fp))
@@ -1245,7 +1245,7 @@ namespace SSD_Components
 					cur_chunk = { domain->cur_fp, new_ref, PPA, transaction->LPA };//Update the chunk info to be inserted into hash table
 					VPA = PPA ^ (1ULL << (63));//Convert PPA to VPA
 					doneVPA = true;
-					if (new_ref > 1)//Convert PPA-to-VPA and change previous LPA-to-PPA mapping to LPA-to-VPA
+					if (new_ref == 2)//Convert PPA-to-VPA and change previous LPA-to-PPA mapping to LPA-to-VPA
 					{
 						LPA_type target_lpa = domain->deduplicator->GetChunkInfo(domain->cur_fp).LPA;//Get LPA from hash table
 						//If we get PPA from FP table, it triggers a read to get LPA from flash page metadata
@@ -1258,11 +1258,11 @@ namespace SSD_Components
 				domain->deduplicator->Update_FPtable(FP_entry);//If this FP entry already exists deduplicator updates ref and physical address, or it directly inserts into hash table.
 				domain->Write_with_fp_no++;
 
-				if (cur_chunk.ref > 1)//Update VPA-to-PPA Secondary Mapping Table
+				if (cur_chunk.ref == 2)//Update VPA-to-PPA Secondary Mapping Table
 				{
 					SMTEntryType cur_SMTEntry = { domain->deduplicator->GetChunkInfo(domain->cur_fp).PPA };
 					std::pair<PPA_type, SMTEntryType> cur_SMTpair(VPA, cur_SMTEntry);
-					domain->Update_SMT(ideal_mapping_table, transaction->Stream_id, cur_SMTpair);
+					domain->SecondaryMappingTable.insert(cur_SMTpair);
 				}
 				domain->deduplicator->Print_FPtable();
 				domain->Print_PMT();
@@ -1295,12 +1295,7 @@ namespace SSD_Components
 		std::unordered_map<std::string, ChunkInfo>::iterator iter = FPtable.find(FP_entry.first);
 		if (iter != FPtable.end())//duplicate
 		{
-			iter->second.PPA = FP_entry.second.PPA;
 			iter->second.ref = FP_entry.second.ref;
-			iter->second.LPA = FP_entry.second.LPA;//Record the newest version of LPA
-			//While it trigger GC, the oldest version LPA will be likely removed first.
-			//Then it will fetch FP in metadata to update FP table.
-			//For example, decrease ref number and PPA.
 		}
 		else//unique
 		{
@@ -1331,14 +1326,6 @@ namespace SSD_Components
 			return got->second;
 	} 
 	
-	void AddressMappingDomain::Update_SMT(const bool ideal_mapping, const stream_id_type stream_id, std::pair<PPA_type, SMTEntryType> cur_SMTEntry)
-	{
-		if (ideal_mapping)
-		{
-			SecondaryMappingTable.insert(cur_SMTEntry);
-			//std::cout << "VPA: " << cur_SMTEntry.first << ", PPA: " << SecondaryMappingTable[cur_SMTEntry.first].PPA << std::endl;
-		}
-	}
 	void AddressMappingDomain::Print_PMT()
 	{
 		std::cout << "========== Print PMT (Full Page) ==========\n";
