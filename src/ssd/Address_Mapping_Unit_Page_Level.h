@@ -50,10 +50,16 @@ namespace SSD_Components
 
 	struct ChunkInfo//** Append for CAFTL
 	{
-		std::string FP;//fingerprint, i.e. SHA-1
-		size_t ref;//number of this chunk appear
 		PPA_type PPA;
+		size_t ref;//number of this chunk appear
+	}; 
+
+	struct RMEntryType//** Append for CAFTL reverse mapping
+	{
+		FP_type FP;
 		LPA_type LPA;
+		VPA_type VPA;
+		bool use_SMT;//For unique chunk but using two-level mapping (ref decreases to 1)
 	};
 
 	class Deduplicator//** Append for CAFTL
@@ -61,13 +67,13 @@ namespace SSD_Components
 	public:
 		Deduplicator();
 		~Deduplicator();
-		void Update_FPtable(std::pair<std::string, ChunkInfo> FP_entry);
+		void Update_FPtable(std::pair<FP_type, ChunkInfo> FP_entry);
 		void Print_FPtable();
-		bool In_FPtable(std::string FP);//** Check if this FP exists in hash table
-		ChunkInfo GetChunkInfo(std::string FP);
+		bool In_FPtable(FP_type FP);//** Check if this FP exists in hash table
+		ChunkInfo GetChunkInfo(FP_type FP);
 		
 	private:
-		std::unordered_map<std::string, ChunkInfo> FPtable;
+		std::unordered_map<FP_type, ChunkInfo> FPtable;
 		size_t Total_chunk_no;
 		size_t Dup_chunk_no;
 		size_t Dedup_rate;
@@ -162,11 +168,16 @@ namespace SSD_Components
 
 		//** Append for CAFTL
 		Deduplicator *deduplicator;
-		std::map<PPA_type, SMTEntryType> SecondaryMappingTable;//** For CAFTL 2-level mapping while GMT as Primary Mapping Table in CAFTL. It should be inserted as pair <VPA, PPA>
+		std::map<VPA_type, SMTEntryType> SecondaryMappingTable;//** For CAFTL 2-level mapping while GMT as Primary Mapping Table in CAFTL. It should be inserted as pair <VPA, PPA>
+		std::map<PPA_type, RMEntryType> ReverseMapping;//** Simplify read operation for metadata in OOB e.g., FP by using <PPA, FP> structure to update FP table
+		void Update_ReverseMapping(std::pair<PPA_type, RMEntryType> cur_rev_pair);
+		void Print_ReverseMapping();
 		void Print_PMT();
 		void Print_SMT();
+		bool In_SMT(VPA_type VPA);
+		SMTEntryType Get_SMTEntry(VPA_type VPA);
 		std::ifstream fp_input_file;//** Append for CAFTL fp input
-		std::string cur_fp;//** Record current fp
+		FP_type cur_fp;//** Record current fp
 		size_t Write_with_fp_no;
 		size_t Total_fp_no;//** Total number of fingerprints
 		size_t Total_write_page_no;//** Including partial and full write

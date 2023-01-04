@@ -224,7 +224,7 @@ namespace SSD_Components
 		//** Append for CAFTL
 		deduplicator = new Deduplicator();
 
-		std::string fp_input_file_path = "C:\\Users\\USER\\Desktop\\dedup50perc.txt";
+		FP_type fp_input_file_path = "C:\\Users\\Ron\\Desktop\\dr_50perc.txt";
 		fp_input_file.open(fp_input_file_path);//** append
 		Total_fp_no = 0;
 		while (std::getline(fp_input_file, cur_fp))
@@ -1172,130 +1172,239 @@ namespace SSD_Components
 		AddressMappingDomain* domain = domains[transaction->Stream_id];
 		PPA_type old_ppa = domain->Get_ppa(ideal_mapping_table, transaction->Stream_id, transaction->LPA);
 
-		if (old_ppa == NO_PPA)  /*this is the first access to the logical page*/
+		//** Modified for CAFTL
+		//(1)hash table initialization (2)PPN->VPN (3)VPN-to-PPN mapping
+		bool PPA_invalid = false;
+		bool use_SMT = false;
+		page_status_type cur_bitmap = ((NVM_Transaction_Flash_WR*)transaction)->write_sectors_bitmap | domain->Get_page_status(ideal_mapping_table, transaction->Stream_id, transaction->LPA);
+		ChunkInfo cur_chunk;
+		std::pair<FP_type, ChunkInfo> FP_entry;
+		VPA_type VPA = NO_PPA;
+	
+		if (cur_bitmap == pow(2, sector_no_per_page) - 1)//If it is a full page write
 		{
-			if (is_for_gc) {
-				PRINT_ERROR("Unexpected mapping table status in allocate_page_in_plane_for_user_write function for a GC/WL write!")
-			}
-		} else {
-			if (is_for_gc) {
-				NVM::FlashMemory::Physical_Page_Address addr;
-				Convert_ppa_to_address(old_ppa, addr);
-				block_manager->Invalidate_page_in_block(transaction->Stream_id, addr);
-				page_status_type page_status_in_cmt = domain->Get_page_status(ideal_mapping_table, transaction->Stream_id, transaction->LPA);
-				if (page_status_in_cmt != transaction->write_sectors_bitmap)
-					PRINT_ERROR("Unexpected mapping table status in allocate_page_in_plane_for_user_write for a GC/WL write!")
-			} else {
-				page_status_type prev_page_status = domain->Get_page_status(ideal_mapping_table, transaction->Stream_id, transaction->LPA);
-				page_status_type status_intersection = transaction->write_sectors_bitmap & prev_page_status;
-				//check if an update read is required
-				if (status_intersection == prev_page_status) {
+			if (is_for_gc)//GC for CAFTL
+			{
+				if (old_ppa == NO_PPA)
+					PRINT_ERROR("Unexpected mapping table status in allocate_page_in_plane_for_user_write function for a GC/WL write!")
+				else
+				{
 					NVM::FlashMemory::Physical_Page_Address addr;
 					Convert_ppa_to_address(old_ppa, addr);
 					block_manager->Invalidate_page_in_block(transaction->Stream_id, addr);
-				} else {
-					page_status_type read_pages_bitmap = status_intersection ^ prev_page_status;
-					NVM_Transaction_Flash_RD *update_read_tr = new NVM_Transaction_Flash_RD(transaction->Source, transaction->Stream_id,
-						count_sector_no_from_status_bitmap(read_pages_bitmap) * SECTOR_SIZE_IN_BYTE, transaction->LPA, old_ppa, transaction->UserIORequest,
-						transaction->Content, transaction, read_pages_bitmap, domain->GlobalMappingTable[transaction->LPA].TimeStamp);
-					Convert_ppa_to_address(old_ppa, update_read_tr->Address);
-					block_manager->Read_transaction_issued(update_read_tr->Address);//Inform block manager about a new transaction as soon as the transaction's target address is determined
-					block_manager->Invalidate_page_in_block(transaction->Stream_id, update_read_tr->Address);
-					transaction->RelatedRead = update_read_tr;
+					page_status_type page_status_in_cmt = domain->Get_page_status(ideal_mapping_table, transaction->Stream_id, transaction->LPA);
+					if (page_status_in_cmt != transaction->write_sectors_bitmap)
+						PRINT_ERROR("Unexpected mapping table status in allocate_page_in_plane_for_user_write for a GC/WL write!")
 				}
+				block_manager->Allocate_block_and_page_in_plane_for_gc_write(transaction->Stream_id, transaction->Address);
+				transaction->PPA = Convert_address_to_ppa(transaction->Address);
+				domain->Update_mapping_info(ideal_mapping_table, transaction->Stream_id, transaction->LPA, transaction->PPA,
+					((NVM_Transaction_Flash_WR*)transaction)->write_sectors_bitmap | domain->Get_page_status(ideal_mapping_table, transaction->Stream_id, transaction->LPA));
+			}
+			else //Its full page write and not GC
+			{
+				if (!domain->fp_input_file.is_open())
+				{
+					PRINT_ERROR("Fail to open fingerprint input!");
+					return;
+				}
+				if (std::getline(domain->fp_input_file, domain->cur_fp))//Make sure that fingerprints are sufficient for full page write trace
+				{
+					std::cout << "\nRead trace line no: " << domain->Write_with_fp_no << ", LPA: " << transaction->LPA << ", old PPA: " << old_ppa << ", FP: " << domain->cur_fp << std::endl;
+					/* <Step 1.> Check if this LPA write before
+					* If not jump to <Step 2.>
+					* If so, (1)Get last time PPA. (2)Get FP used by this PPA. (3)Decrease ref by 1 of this FP, then if ref = 0 this PPA should be invalid. 
+					* (4)If PPA got invalid, SMT should erase this VPA-PPA mapping
+					* Q1. What about LPA-VPA after erasing VPA-PPA? Ans. This updated LPA will overwrite it.
+					* Q2. Why not convert it back to LPA-PPA if the PPA changes from duplicate (ref > 1) to unique (ref = 1)?
+					* -- Ans. If we want to convert it from LPA-VPA & VPA-PPA to LPA-PPA, we need to derive VPA first and then derive LPA
+					* -- The problem is there's no reverse mapping for VPA to LPA, this will be an 1-to-n mapping (it's unfixed for storing multiple LPAs) */
+					if (old_ppa != NO_PPA)
+					{
+						if (domain->In_SMT(old_ppa))//If this ppa is converted into vpa already
+							old_ppa = domain->Get_SMTEntry(old_ppa).PPA;//fetch ppa but not vpa
+						FP_type old_fp = domain->ReverseMapping[old_ppa].FP;//Get its fingerprint by RM
+
+						std::cout << "Same LPA exists, update old fp info: " << old_fp << std::endl;
+
+						ChunkInfo old_chunk = domain->deduplicator->GetChunkInfo(old_fp);//For updation of old_fp info in FPtable
+
+						old_chunk.ref -= 1;//Assume this LPA will ref to another PPA
+						if (old_chunk.ref == 0)//Should this PPA got invalid? If it gots multiple LPA ref this PPA, this PPA should not be invalid
+						{
+							PPA_invalid = true;//PPA should not be invalid
+							if(domain->In_SMT(old_ppa))//delete this VPA-PPA
+								domain->SecondaryMappingTable.erase(old_ppa);
+						}
+
+						std::pair<FP_type, ChunkInfo> target_pair(old_fp, old_chunk);//Create FP pair to update FPtable
+						domain->deduplicator->Update_FPtable(target_pair);//Update old fp ref, if the ref == 0 after updation this fp entry will be erased
+						domain->deduplicator->Print_FPtable();
+
+						if (PPA_invalid == true)
+						{
+							page_status_type prev_page_status = domain->Get_page_status(ideal_mapping_table, transaction->Stream_id, transaction->LPA);
+							page_status_type status_intersection = transaction->write_sectors_bitmap & prev_page_status;
+							//check if an update read is required
+							if (status_intersection == prev_page_status) {
+								NVM::FlashMemory::Physical_Page_Address addr;
+								Convert_ppa_to_address(old_ppa, addr);
+								block_manager->Invalidate_page_in_block(transaction->Stream_id, addr);
+								std::cout << "INVALID old ppa\n";
+							}
+							else {
+								page_status_type read_pages_bitmap = status_intersection ^ prev_page_status;
+								NVM_Transaction_Flash_RD *update_read_tr = new NVM_Transaction_Flash_RD(transaction->Source, transaction->Stream_id,
+									count_sector_no_from_status_bitmap(read_pages_bitmap) * SECTOR_SIZE_IN_BYTE, transaction->LPA, old_ppa, transaction->UserIORequest,
+									transaction->Content, transaction, read_pages_bitmap, domain->GlobalMappingTable[transaction->LPA].TimeStamp);
+								Convert_ppa_to_address(old_ppa, update_read_tr->Address);
+								block_manager->Read_transaction_issued(update_read_tr->Address);//Inform block manager about a new transaction as soon as the transaction's target address is determined
+								block_manager->Invalidate_page_in_block(transaction->Stream_id, update_read_tr->Address);
+								transaction->RelatedRead = update_read_tr;
+								std::cout << "INVALID old ppa\n";
+							}
+						}
+					}
+					
+					/*<Step 2.> Dedup current FP
+					* (1)If its not in FP table, this LPA will be written into a new PPA and insert this FP to FP table
+					* (2)Or it increases the ref by 1 of this FP, and get VPA
+					* Notice that if the ref = 2, these 2 LPAs should be mapped to VPA */
+					std::cout << "**Dedupe current fingerprint\n";
+					if (!domain->deduplicator->In_FPtable(domain->cur_fp))//First time insertion
+					{
+						block_manager->Allocate_block_and_page_in_plane_for_user_write(transaction->Stream_id, transaction->Address);
+						transaction->PPA = Convert_address_to_ppa(transaction->Address);
+						cur_chunk = { transaction->PPA, 1 };//Insert first chunk of this entry of hash table
+					}
+					else//Found duplication
+					{
+						use_SMT = true;
+						size_t new_ref = domain->deduplicator->GetChunkInfo(domain->cur_fp).ref + 1;//With ref increases
+						PPA_type PPA = domain->deduplicator->GetChunkInfo(domain->cur_fp).PPA;//Get original PPA from FP table
+						cur_chunk = {PPA, new_ref};//Update the chunk info to be inserted into hash table
+						VPA = PPA ^ (1ULL << (63));//Convert PPA to VPA
+						if (new_ref == 2)//Convert PPA-to-VPA and change previous LPA-to-PPA mapping to LPA-to-VPA
+						{
+							//這裡應該是要用RM而不是FP，FP應要避免存LPA
+							LPA_type target_lpa = domain->ReverseMapping[PPA].LPA;
+							domain->Update_mapping_info(ideal_mapping_table, transaction->Stream_id, target_lpa, VPA, domain->Get_page_status(ideal_mapping_table, transaction->Stream_id, target_lpa));
+						}
+					}
+
+					FP_entry = { domain->cur_fp, cur_chunk };
+					domain->deduplicator->Update_FPtable(FP_entry);//If this FP entry already exists deduplicator will update ref and physical address, or it will directly insert into hash table.
+					
+					if(use_SMT)
+						domain->Update_mapping_info(ideal_mapping_table, transaction->Stream_id, transaction->LPA, VPA, cur_bitmap);//Map current LPA to VPA
+					else
+						domain->Update_mapping_info(ideal_mapping_table, transaction->Stream_id, transaction->LPA, cur_chunk.PPA, cur_bitmap);
+
+					/*<Step 3.> Update Reverse Mapping and SMT (if neccesary)
+					* (1) Update Reverse Mapping (RM) which simulates metadata (e.g., LPA/VPA, FP) in OOB
+					* (2) Update SMT if ref = 2, which means 
+					* Q1. When to use RM? Ans. its for GC
+					* -- When it triggers GC, we will move valid PPAs to new PPAs.
+					* -- By accessing those PPAs, we can (1)get FP to update PPA in FP table and (2)get LPA/VPA to update mapping.
+					* Q2. For those PPAs are duplicate (ref > 1), why using only VPA to update mapping (SMT)?
+					* Ans. For a unique PPA, we move it to a new_PPA and simply maps LPA to new_PPA
+					* (There will be unique PPA still use VPA)
+					* -- For a duplicate PPA, LPAs maps to a VPA and this VPA maps to this PPA.
+					* -- If we move it to a new_PPA it will be like LPAs-VPA and VPA-new_PPA
+					* Special case: unique PPA but still remain VPA: LPA->VPA->PPA
+					* 如果是duplicate，那一定用VPA；如果用VPA，則不一定是duplicate
+					* 如果是unique又用SMT，則當ref變大的時候，
+					* To prevent unique PPA using LPA->VPA->PPA goes wrong, we check if it use_SMT
+					* if use_SMT = true, it will never go back to false status
+					*/
+					RMEntryType RMEntry = { domain->cur_fp, transaction->LPA, VPA, use_SMT };
+					std::pair<PPA_type, RMEntryType> cur_RMEntry(cur_chunk.PPA, RMEntry);
+					domain->Update_ReverseMapping(cur_RMEntry);
+					if (use_SMT == true)
+					{
+						SMTEntryType cur_SMTEntry = { domain->deduplicator->GetChunkInfo(domain->cur_fp).PPA };
+						std::pair<VPA_type, SMTEntryType> cur_SMTpair(VPA, cur_SMTEntry);
+						if (domain->In_SMT(VPA))
+							domain->SecondaryMappingTable.erase(VPA);
+						domain->SecondaryMappingTable.insert(cur_SMTpair);
+					}
+					
+					domain->deduplicator->Print_FPtable();
+					domain->Print_PMT();
+					domain->Print_SMT();
+					domain->Print_ReverseMapping();
+					domain->Write_with_fp_no++;
+				}
+				else;//No fingerprints
+				domain->Full_write_page_no++;
 			}
 		}
-
-		//** Modified for CAFTL
-		//(1)hash table initialization (2)PPN->VPN (3)VPN-to-PPN mapping
-		page_status_type cur_bitmap = ((NVM_Transaction_Flash_WR*)transaction)->write_sectors_bitmap | domain->Get_page_status(ideal_mapping_table, transaction->Stream_id, transaction->LPA);
-		ChunkInfo cur_chunk;
-		std::pair<std::string, ChunkInfo> FP_entry;
-		PPA_type VPA = NO_PPA;
-		bool doneVPA = false;
-		if (cur_bitmap == pow(2, sector_no_per_page) - 1)//If it is a full page write
+		else//Partial page writem (Original MQSim implementation) 
 		{
-			if (!domain->fp_input_file.is_open())
+			if (old_ppa == NO_PPA)  /*this is the first access to the logical page*/
 			{
-				PRINT_ERROR("Fail to open fingerprint input!");
-				return;
+				if (is_for_gc) {
+					PRINT_ERROR("Unexpected mapping table status in allocate_page_in_plane_for_user_write function for a GC/WL write!")
+				}
 			}
-			if (std::getline(domain->fp_input_file, domain->cur_fp))//Make sure that fingerprints are sufficient for full page write trace
-			{
-				std::cout << "\nRead trace line no: " << domain->Write_with_fp_no << ", LPA: " << transaction->LPA << ", FP: " << domain->cur_fp << std::endl;
-				if (!domain->deduplicator->In_FPtable(domain->cur_fp))//First time insertion
-				{
-					/*The following lines should not be ordered with respect to the block_manager->Invalidate_page_in_block
-					* function call in the above code blocks. Otherwise, GC may be invoked (due to the call to Allocate_block_....) and
-					* may decide to move a page that is just invalidated.*/
-					if (is_for_gc) {
-						block_manager->Allocate_block_and_page_in_plane_for_gc_write(transaction->Stream_id, transaction->Address);
+			else {
+				if (is_for_gc) {
+					NVM::FlashMemory::Physical_Page_Address addr;
+					Convert_ppa_to_address(old_ppa, addr);
+					block_manager->Invalidate_page_in_block(transaction->Stream_id, addr);
+					page_status_type page_status_in_cmt = domain->Get_page_status(ideal_mapping_table, transaction->Stream_id, transaction->LPA);
+					if (page_status_in_cmt != transaction->write_sectors_bitmap)
+						PRINT_ERROR("Unexpected mapping table status in allocate_page_in_plane_for_user_write for a GC/WL write!")
+				}
+				else {
+					page_status_type prev_page_status = domain->Get_page_status(ideal_mapping_table, transaction->Stream_id, transaction->LPA);
+					page_status_type status_intersection = transaction->write_sectors_bitmap & prev_page_status;
+					//check if an update read is required
+					if (status_intersection == prev_page_status) {
+						NVM::FlashMemory::Physical_Page_Address addr;
+						Convert_ppa_to_address(old_ppa, addr);
+						block_manager->Invalidate_page_in_block(transaction->Stream_id, addr);
 					}
 					else {
-						block_manager->Allocate_block_and_page_in_plane_for_user_write(transaction->Stream_id, transaction->Address);
+						page_status_type read_pages_bitmap = status_intersection ^ prev_page_status;
+						NVM_Transaction_Flash_RD *update_read_tr = new NVM_Transaction_Flash_RD(transaction->Source, transaction->Stream_id,
+							count_sector_no_from_status_bitmap(read_pages_bitmap) * SECTOR_SIZE_IN_BYTE, transaction->LPA, old_ppa, transaction->UserIORequest,
+							transaction->Content, transaction, read_pages_bitmap, domain->GlobalMappingTable[transaction->LPA].TimeStamp);
+						Convert_ppa_to_address(old_ppa, update_read_tr->Address);
+						block_manager->Read_transaction_issued(update_read_tr->Address);//Inform block manager about a new transaction as soon as the transaction's target address is determined
+						block_manager->Invalidate_page_in_block(transaction->Stream_id, update_read_tr->Address);
+						transaction->RelatedRead = update_read_tr;
 					}
-					transaction->PPA = Convert_address_to_ppa(transaction->Address);
-					cur_chunk = { domain->cur_fp, 1, transaction->PPA, transaction->LPA};//Insert first chunk of this entry of hash table
-					domain->Update_mapping_info(ideal_mapping_table, transaction->Stream_id, transaction->LPA, cur_chunk.PPA, cur_bitmap);
 				}
-				else//Found duplication
-				{
-					size_t new_ref = domain->deduplicator->GetChunkInfo(domain->cur_fp).ref + 1;//With ref increases
-					PPA_type PPA = domain->deduplicator->GetChunkInfo(domain->cur_fp).PPA;//Get original PPA from FP table
-					cur_chunk = { domain->cur_fp, new_ref, PPA, transaction->LPA };//Update the chunk info to be inserted into hash table
-					VPA = PPA ^ (1ULL << (63));//Convert PPA to VPA
-					doneVPA = true;
-					if (new_ref == 2)//Convert PPA-to-VPA and change previous LPA-to-PPA mapping to LPA-to-VPA
-					{
-						LPA_type target_lpa = domain->deduplicator->GetChunkInfo(domain->cur_fp).LPA;//Get LPA from hash table
-						//If we get PPA from FP table, it triggers a read to get LPA from flash page metadata
-						//Update both previous LPA and current LPA mapping to LPA-to-VPA
-						domain->Update_mapping_info(ideal_mapping_table, transaction->Stream_id, target_lpa, VPA, domain->Get_page_status(ideal_mapping_table, transaction->Stream_id, target_lpa));
-					}
-					domain->Update_mapping_info(ideal_mapping_table, transaction->Stream_id, transaction->LPA, VPA, cur_bitmap);//Map current LPA to VPA
-				}
-				FP_entry = { domain->cur_fp, cur_chunk };
-				domain->deduplicator->Update_FPtable(FP_entry);//If this FP entry already exists deduplicator updates ref and physical address, or it directly inserts into hash table.
-				domain->Write_with_fp_no++;
-
-				if (cur_chunk.ref == 2)//Update VPA-to-PPA Secondary Mapping Table
-				{
-					SMTEntryType cur_SMTEntry = { domain->deduplicator->GetChunkInfo(domain->cur_fp).PPA };
-					std::pair<PPA_type, SMTEntryType> cur_SMTpair(VPA, cur_SMTEntry);
-					domain->SecondaryMappingTable.insert(cur_SMTpair);
-				}
-				domain->deduplicator->Print_FPtable();
-				domain->Print_PMT();
-				if (doneVPA == true)
-					std::cout << "Did VPA convertion: " << VPA << std::endl;
-				domain->Print_SMT();
 			}
-			else;//No fingerprints
-			domain->Full_write_page_no++;
-		}
-		else//Partial page write
-		{
+
+			/*The following lines should not be ordered with respect to the block_manager->Invalidate_page_in_block
+			* function call in the above code blocks. Otherwise, GC may be invoked (due to the call to Allocate_block_....) and
+			* may decide to move a page that is just invalidated.*/
 			if (is_for_gc) {
 				block_manager->Allocate_block_and_page_in_plane_for_gc_write(transaction->Stream_id, transaction->Address);
 			}
 			else {
 				block_manager->Allocate_block_and_page_in_plane_for_user_write(transaction->Stream_id, transaction->Address);
 			}
-
 			transaction->PPA = Convert_address_to_ppa(transaction->Address);
-			domain->Update_mapping_info(ideal_mapping_table, transaction->Stream_id, transaction->LPA, transaction->PPA, cur_bitmap);
+			domain->Update_mapping_info(ideal_mapping_table, transaction->Stream_id, transaction->LPA, transaction->PPA,
+				((NVM_Transaction_Flash_WR*)transaction)->write_sectors_bitmap | domain->Get_page_status(ideal_mapping_table, transaction->Stream_id, transaction->LPA));
 		}
 		domain->Total_write_page_no++;
 	}
 
 	Deduplicator::Deduplicator() {}
 	Deduplicator::~Deduplicator() {}
-	void Deduplicator::Update_FPtable(std::pair<std::string, ChunkInfo> FP_entry)
+	void Deduplicator::Update_FPtable(std::pair<FP_type, ChunkInfo> FP_entry)
 	{
-		std::unordered_map<std::string, ChunkInfo>::iterator iter = FPtable.find(FP_entry.first);
+		std::unordered_map<FP_type, ChunkInfo>::iterator iter = FPtable.find(FP_entry.first);
 		if (iter != FPtable.end())//duplicate
 		{
 			iter->second.ref = FP_entry.second.ref;
+			iter->second.PPA = FP_entry.second.PPA;
+			if (iter->second.ref == 0)
+				FPtable.erase(FP_entry.first);
 		}
 		else//unique
 		{
@@ -1305,23 +1414,25 @@ namespace SSD_Components
 	void Deduplicator::Print_FPtable()
 	{
 		std::cout << "========== Print FP table =================\n";
+		if (FPtable.size() == 0)
+			std::cout << "(Empty)\n";
 		for (auto const &pair : FPtable) {
-			std::cout << "{" << pair.first << ": " << pair.second.ref << ", " << pair.second.PPA << "}\n";
+			std::cout << "{" << pair.first << ": " << pair.second.PPA << ", " << pair.second.ref << "}\n";
 		}
 	}
-	bool Deduplicator::In_FPtable(std::string FP)
+	bool Deduplicator::In_FPtable(FP_type FP)
 	{
-		std::unordered_map<std::string, ChunkInfo>::const_iterator got = FPtable.find(FP);
+		std::unordered_map<FP_type, ChunkInfo>::const_iterator got = FPtable.find(FP);
 		if (got == FPtable.end())
 			return false;
 		else return true;
 	}
 
-	ChunkInfo Deduplicator::GetChunkInfo(std::string FP)
+	ChunkInfo Deduplicator::GetChunkInfo(FP_type FP)
 	{
-		std::unordered_map<std::string, ChunkInfo>::const_iterator got = FPtable.find(FP);
+		std::unordered_map<FP_type, ChunkInfo>::const_iterator got = FPtable.find(FP);
 		if (got == FPtable.end())
-			PRINT_ERROR("No Chunk in Fingerprint Table")
+			PRINT_ERROR("This chunk not is in Fingerprint Table")
 		else 
 			return got->second;
 	} 
@@ -1338,10 +1449,52 @@ namespace SSD_Components
 	void AddressMappingDomain::Print_SMT()
 	{
 		std::cout << "========== Print SMT ======================\n";
+		if (SecondaryMappingTable.size() == 0)
+			std::cout << "(Empty)\n";
 		for (const auto &entry : SecondaryMappingTable) {
 			std::cout << "{VPN: " << entry.first << ", PPN: " << entry.second.PPA << "}\n";
 		}
 	}
+
+	bool AddressMappingDomain::In_SMT(VPA_type VPA)
+	{
+		std::map<VPA_type, SMTEntryType>::const_iterator got = SecondaryMappingTable.find(VPA);
+		if (got == SecondaryMappingTable.end())
+			return false;
+		else return true;
+	}
+
+	SMTEntryType AddressMappingDomain::Get_SMTEntry(VPA_type VPA)
+	{
+		std::map<VPA_type, SMTEntryType>::const_iterator got = SecondaryMappingTable.find(VPA);
+		if (got == SecondaryMappingTable.end())
+			PRINT_ERROR("This VPA is not in SMT")
+		else return got->second;
+	}
+
+	void AddressMappingDomain::Print_ReverseMapping()
+	{
+		std::cout << "========== Print ReverseMapping ===========\n";
+		if (ReverseMapping.size() == 0)
+			std::cout << "(Empty)\n";
+		for (const auto &entry : ReverseMapping) {
+			std::cout << "{PPN: " << entry.first << ", FP: " << entry.second.FP << ", LPA: " << entry.second.LPA << "}\n";
+		}
+	}
+	void AddressMappingDomain::Update_ReverseMapping(std::pair<PPA_type, RMEntryType> cur_rev_pair)
+	{
+		std::map<PPA_type, RMEntryType>::iterator got = ReverseMapping.find(cur_rev_pair.first);
+		if (got == ReverseMapping.end())
+			ReverseMapping.insert(cur_rev_pair);
+		else
+		{
+			if (cur_rev_pair.second.use_SMT == true)
+				got->second.VPA = cur_rev_pair.second.VPA;
+			else
+				got->second.VPA = NO_PPA;
+		}
+	}
+
 	void Address_Mapping_Unit_Page_Level::allocate_plane_for_translation_write(NVM_Transaction_Flash* transaction)
 	{
 		allocate_plane_for_user_write((NVM_Transaction_Flash_WR*)transaction);
