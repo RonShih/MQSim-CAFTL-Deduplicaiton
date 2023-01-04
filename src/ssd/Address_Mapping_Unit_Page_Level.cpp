@@ -6,6 +6,7 @@
 #include "Address_Mapping_Unit_Page_Level.h"
 #include "Stats.h"
 #include "../utils/Logical_Address_Partitioning_Unit.h"
+#include <iomanip>//** Append for CAFTL output
 
 namespace SSD_Components
 {
@@ -1210,7 +1211,7 @@ namespace SSD_Components
 				}
 				if (std::getline(domain->fp_input_file, domain->cur_fp))//Make sure that fingerprints are sufficient for full page write trace
 				{
-					std::cout << "\nRead trace line no: " << domain->Write_with_fp_no << ", LPA: " << transaction->LPA << ", old PPA: " << old_ppa << ", FP: " << domain->cur_fp << std::endl;
+					std::cout << "\n------------------------------ Read trace line no: " << domain->Write_with_fp_no << " ------------------------------\nLPA: " << transaction->LPA << ", old PPA: " << old_ppa << ", FP: " << domain->cur_fp << std::endl;
 					/* <Step 1.> Check if this LPA write before
 					* If not jump to <Step 2.>
 					* If so, (1)Get last time PPA. (2)Get FP used by this PPA. (3)Decrease ref by 1 of this FP, then if ref = 0 this PPA should be invalid. 
@@ -1231,18 +1232,21 @@ namespace SSD_Components
 
 						old_chunk.ref -= 1;//Assume this LPA will ref to another PPA
 						if (old_chunk.ref == 0)//Should this PPA got invalid? If it gots multiple LPA ref this PPA, this PPA should not be invalid
-						{
-							PPA_invalid = true;//PPA should not be invalid
-							if(domain->In_SMT(old_ppa))//delete this VPA-PPA
-								domain->SecondaryMappingTable.erase(old_ppa);
-						}
+							PPA_invalid = true;//PPA should be invalid
 
 						std::pair<FP_type, ChunkInfo> target_pair(old_fp, old_chunk);//Create FP pair to update FPtable
 						domain->deduplicator->Update_FPtable(target_pair);//Update old fp ref, if the ref == 0 after updation this fp entry will be erased
 						domain->deduplicator->Print_FPtable();
+						
 
 						if (PPA_invalid == true)
 						{
+							std::cout << "Erase old_ppa in RM and SMT if necessary\n";
+							if (domain->In_SMT(old_ppa))//If old_ppa is VPA
+								domain->SecondaryMappingTable.erase(old_ppa);
+							else //If old_ppa is PPA
+								domain->ReverseMapping.erase(old_ppa);//delete old_ppa mapping
+
 							page_status_type prev_page_status = domain->Get_page_status(ideal_mapping_table, transaction->Stream_id, transaction->LPA);
 							page_status_type status_intersection = transaction->write_sectors_bitmap & prev_page_status;
 							//check if an update read is required
@@ -1270,11 +1274,12 @@ namespace SSD_Components
 					* (1)If its not in FP table, this LPA will be written into a new PPA and insert this FP to FP table
 					* (2)Or it increases the ref by 1 of this FP, and get VPA
 					* Notice that if the ref = 2, these 2 LPAs should be mapped to VPA */
-					std::cout << "**Dedupe current fingerprint\n";
+					std::cout << "Dedupe current fingerprint\n";
 					if (!domain->deduplicator->In_FPtable(domain->cur_fp))//First time insertion
 					{
 						block_manager->Allocate_block_and_page_in_plane_for_user_write(transaction->Stream_id, transaction->Address);
 						transaction->PPA = Convert_address_to_ppa(transaction->Address);
+						std::cout << "Get new PPA: " << transaction->PPA << std::endl;
 						cur_chunk = { transaction->PPA, 1 };//Insert first chunk of this entry of hash table
 					}
 					else//Found duplication
@@ -1317,6 +1322,7 @@ namespace SSD_Components
 					* To prevent unique PPA using LPA->VPA->PPA goes wrong, we check if it use_SMT
 					* if use_SMT = true, it will never go back to false status
 					*/
+
 					RMEntryType RMEntry = { domain->cur_fp, transaction->LPA, VPA, use_SMT };
 					std::pair<PPA_type, RMEntryType> cur_RMEntry(cur_chunk.PPA, RMEntry);
 					domain->Update_ReverseMapping(cur_RMEntry);
@@ -1417,7 +1423,7 @@ namespace SSD_Components
 		if (FPtable.size() == 0)
 			std::cout << "(Empty)\n";
 		for (auto const &pair : FPtable) {
-			std::cout << "{" << pair.first << ": " << pair.second.PPA << ", " << pair.second.ref << "}\n";
+			std::cout << "{" << pair.first << ": " << pair.second.ref << ", " << pair.second.PPA << "}\n";
 		}
 	}
 	bool Deduplicator::In_FPtable(FP_type FP)
@@ -1443,7 +1449,8 @@ namespace SSD_Components
 		for (int i = 0; i < Total_logical_pages_no; i++)
 		{
 			if (GlobalMappingTable[i].PPA != NO_PPA && GlobalMappingTable[i].WrittenStateBitmap == 65535)
-				std::cout << "{LPN: " << i << ", VPN/PPN: " << GlobalMappingTable[i].PPA << ", Bitmap: " << GlobalMappingTable[i].WrittenStateBitmap << ", TimeStamp: " << GlobalMappingTable[i].TimeStamp << "}\n";
+				std::cout << "{LPN: " << i << ", PPA/VPA: " << GlobalMappingTable[i].PPA << std::endl;
+			//std::cout << "{LPN: "  << i << ", PPA/VPA: "  << GlobalMappingTable[i].PPA << ", Bitmap: " << GlobalMappingTable[i].WrittenStateBitmap << ", TimeStamp: " << GlobalMappingTable[i].TimeStamp << "}\n";
 		}
 	}
 	void AddressMappingDomain::Print_SMT()
@@ -1478,9 +1485,10 @@ namespace SSD_Components
 		if (ReverseMapping.size() == 0)
 			std::cout << "(Empty)\n";
 		for (const auto &entry : ReverseMapping) {
-			std::cout << "{PPN: " << entry.first << ", FP: " << entry.second.FP << ", LPA: " << entry.second.LPA << "}\n";
+			std::cout << "{PPN: " << std::setw(8) << entry.first << ", FP: " << entry.second.FP << ", LPA: "<< entry.second.LPA << ", VPA: " << entry.second.VPA << ", use_SMT: " << entry.second.use_SMT << "}\n";
 		}
 	}
+
 	void AddressMappingDomain::Update_ReverseMapping(std::pair<PPA_type, RMEntryType> cur_rev_pair)
 	{
 		std::map<PPA_type, RMEntryType>::iterator got = ReverseMapping.find(cur_rev_pair.first);
@@ -1489,9 +1497,15 @@ namespace SSD_Components
 		else
 		{
 			if (cur_rev_pair.second.use_SMT == true)
+			{
 				got->second.VPA = cur_rev_pair.second.VPA;
+			}
 			else
+			{
+				got->second.LPA = cur_rev_pair.second.LPA;
 				got->second.VPA = NO_PPA;
+			}
+			got->second.use_SMT = cur_rev_pair.second.use_SMT;
 		}
 	}
 
