@@ -71,12 +71,14 @@ namespace SSD_Components
 		void Print_FPtable();
 		bool In_FPtable(FP_type FP);//** Check if this FP exists in hash table
 		ChunkInfo GetChunkInfo(FP_type FP);
-		
-	private:
-		std::unordered_map<FP_type, ChunkInfo> FPtable;
+		float Get_DedupRate();
+
 		size_t Total_chunk_no;
 		size_t Dup_chunk_no;
-		size_t Dedup_rate;
+		
+	private: 
+		std::unordered_map<FP_type, ChunkInfo> FPtable;
+		float Dedup_rate;
 	};
 
 	class Cached_Mapping_Table

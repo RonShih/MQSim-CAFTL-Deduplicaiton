@@ -264,6 +264,7 @@ namespace SSD_Components
 		std::cout << "Total fingerprints num: " << Total_fp_no << std::endl;
 		std::cout << "Total page write num (partial or full): " << Total_write_page_no << std::endl;
 		std::cout << "Full page write num: " << Full_write_page_no << std::endl;
+		std::cout << "Dedup Rate: " << deduplicator->Get_DedupRate() * 100.0 << "%\n";
 		fp_input_file.close();
 		delete deduplicator;
 		//**
@@ -1212,14 +1213,7 @@ namespace SSD_Components
 				if (std::getline(domain->fp_input_file, domain->cur_fp))//Make sure that fingerprints are sufficient for full page write trace
 				{
 					std::cout << "\n------------------------------ Read trace line no: " << domain->Write_with_fp_no << " ------------------------------\nLPA: " << transaction->LPA << ", old PPA: " << old_ppa << ", FP: " << domain->cur_fp << std::endl;
-					/* <Step 1.> Check if this LPA write before
-					* If not jump to <Step 2.>
-					* If so, (1)Get last time PPA. (2)Get FP used by this PPA. (3)Decrease ref by 1 of this FP, then if ref = 0 this PPA should be invalid. 
-					* (4)If PPA got invalid, SMT should erase this VPA-PPA mapping
-					* Q1. What about LPA-VPA after erasing VPA-PPA? Ans. This updated LPA will overwrite it.
-					* Q2. Why not convert it back to LPA-PPA if the PPA changes from duplicate (ref > 1) to unique (ref = 1)?
-					* -- Ans. If we want to convert it from LPA-VPA & VPA-PPA to LPA-PPA, we need to derive VPA first and then derive LPA
-					* -- The problem is there's no reverse mapping for VPA to LPA, this will be an 1-to-n mapping (it's unfixed for storing multiple LPAs) */
+					/* Check if this LPA write before */
 					if (old_ppa != NO_PPA)
 					{
 						if (domain->In_SMT(old_ppa))//If this ppa is converted into vpa already
@@ -1238,14 +1232,11 @@ namespace SSD_Components
 						domain->deduplicator->Update_FPtable(target_pair);//Update old fp ref, if the ref == 0 after updation this fp entry will be erased
 						domain->deduplicator->Print_FPtable();
 						
-
 						if (PPA_invalid == true)
 						{
-							std::cout << "Erase old_ppa in RM and SMT if necessary\n";
-							if (domain->In_SMT(old_ppa))//If old_ppa is VPA
-								domain->SecondaryMappingTable.erase(old_ppa);
-							else //If old_ppa is PPA
-								domain->ReverseMapping.erase(old_ppa);//delete old_ppa mapping
+							if (domain->ReverseMapping[old_ppa].use_SMT)//If this old_ppa is using SMT
+								domain->SecondaryMappingTable.erase(old_ppa);//delete vpa-ppa
+							domain->ReverseMapping.erase(old_ppa);//delete old_ppa reverse mapping
 
 							page_status_type prev_page_status = domain->Get_page_status(ideal_mapping_table, transaction->Stream_id, transaction->LPA);
 							page_status_type status_intersection = transaction->write_sectors_bitmap & prev_page_status;
@@ -1270,11 +1261,9 @@ namespace SSD_Components
 						}
 					}
 					
-					/*<Step 2.> Dedup current FP
-					* (1)If its not in FP table, this LPA will be written into a new PPA and insert this FP to FP table
-					* (2)Or it increases the ref by 1 of this FP, and get VPA
-					* Notice that if the ref = 2, these 2 LPAs should be mapped to VPA */
+					/* Dedup current FP */
 					std::cout << "Dedupe current fingerprint\n";
+					domain->deduplicator->Total_chunk_no++;
 					if (!domain->deduplicator->In_FPtable(domain->cur_fp))//First time insertion
 					{
 						block_manager->Allocate_block_and_page_in_plane_for_user_write(transaction->Stream_id, transaction->Address);
@@ -1289,52 +1278,36 @@ namespace SSD_Components
 						PPA_type PPA = domain->deduplicator->GetChunkInfo(domain->cur_fp).PPA;//Get original PPA from FP table
 						cur_chunk = {PPA, new_ref};//Update the chunk info to be inserted into hash table
 						VPA = PPA ^ (1ULL << (63));//Convert PPA to VPA
-						if (new_ref == 2)//Convert PPA-to-VPA and change previous LPA-to-PPA mapping to LPA-to-VPA
+						if (new_ref == 2 && domain->ReverseMapping[PPA].use_SMT == false)//Convert PPA-to-VPA and change previous LPA-to-PPA mapping to LPA-to-VPA
 						{
-							//這裡應該是要用RM而不是FP，FP應要避免存LPA
-							LPA_type target_lpa = domain->ReverseMapping[PPA].LPA;
-							domain->Update_mapping_info(ideal_mapping_table, transaction->Stream_id, target_lpa, VPA, domain->Get_page_status(ideal_mapping_table, transaction->Stream_id, target_lpa));
+							LPA_type old_lpa = domain->ReverseMapping[PPA].LPA;
+							domain->Update_mapping_info(ideal_mapping_table, transaction->Stream_id, old_lpa, VPA, domain->Get_page_status(ideal_mapping_table, transaction->Stream_id, old_lpa));
 						}
+						domain->deduplicator->Dup_chunk_no++;
 					}
 
 					FP_entry = { domain->cur_fp, cur_chunk };
 					domain->deduplicator->Update_FPtable(FP_entry);//If this FP entry already exists deduplicator will update ref and physical address, or it will directly insert into hash table.
 					
-					if(use_SMT)
-						domain->Update_mapping_info(ideal_mapping_table, transaction->Stream_id, transaction->LPA, VPA, cur_bitmap);//Map current LPA to VPA
-					else
-						domain->Update_mapping_info(ideal_mapping_table, transaction->Stream_id, transaction->LPA, cur_chunk.PPA, cur_bitmap);
-
-					/*<Step 3.> Update Reverse Mapping and SMT (if neccesary)
-					* (1) Update Reverse Mapping (RM) which simulates metadata (e.g., LPA/VPA, FP) in OOB
-					* (2) Update SMT if ref = 2, which means 
-					* Q1. When to use RM? Ans. its for GC
-					* -- When it triggers GC, we will move valid PPAs to new PPAs.
-					* -- By accessing those PPAs, we can (1)get FP to update PPA in FP table and (2)get LPA/VPA to update mapping.
-					* Q2. For those PPAs are duplicate (ref > 1), why using only VPA to update mapping (SMT)?
-					* Ans. For a unique PPA, we move it to a new_PPA and simply maps LPA to new_PPA
-					* (There will be unique PPA still use VPA)
-					* -- For a duplicate PPA, LPAs maps to a VPA and this VPA maps to this PPA.
-					* -- If we move it to a new_PPA it will be like LPAs-VPA and VPA-new_PPA
-					* Special case: unique PPA but still remain VPA: LPA->VPA->PPA
-					* 如果是duplicate，那一定用VPA；如果用VPA，則不一定是duplicate
-					* 如果是unique又用SMT，則當ref變大的時候，
-					* To prevent unique PPA using LPA->VPA->PPA goes wrong, we check if it use_SMT
-					* if use_SMT = true, it will never go back to false status
-					*/
-
-					RMEntryType RMEntry = { domain->cur_fp, transaction->LPA, VPA, use_SMT };
-					std::pair<PPA_type, RMEntryType> cur_RMEntry(cur_chunk.PPA, RMEntry);
-					domain->Update_ReverseMapping(cur_RMEntry);
-					if (use_SMT == true)
+					/* Update mapping */
+					if (use_SMT)
 					{
+						domain->Update_mapping_info(ideal_mapping_table, transaction->Stream_id, transaction->LPA, VPA, cur_bitmap);//Map current LPA to VPA
 						SMTEntryType cur_SMTEntry = { domain->deduplicator->GetChunkInfo(domain->cur_fp).PPA };
 						std::pair<VPA_type, SMTEntryType> cur_SMTpair(VPA, cur_SMTEntry);
 						if (domain->In_SMT(VPA))
 							domain->SecondaryMappingTable.erase(VPA);
 						domain->SecondaryMappingTable.insert(cur_SMTpair);
 					}
+					else
+						domain->Update_mapping_info(ideal_mapping_table, transaction->Stream_id, transaction->LPA, cur_chunk.PPA, cur_bitmap);
+
+					/* Update Reverse Mapping */
+					RMEntryType RMEntry = { domain->cur_fp, transaction->LPA, VPA, use_SMT };
+					std::pair<PPA_type, RMEntryType> cur_RMEntry(cur_chunk.PPA, RMEntry);
+					domain->Update_ReverseMapping(cur_RMEntry);
 					
+					/* Show information */
 					domain->deduplicator->Print_FPtable();
 					domain->Print_PMT();
 					domain->Print_SMT();
@@ -1400,7 +1373,7 @@ namespace SSD_Components
 		domain->Total_write_page_no++;
 	}
 
-	Deduplicator::Deduplicator() {}
+	Deduplicator::Deduplicator():Total_chunk_no(0), Dup_chunk_no(0) {}
 	Deduplicator::~Deduplicator() {}
 	void Deduplicator::Update_FPtable(std::pair<FP_type, ChunkInfo> FP_entry)
 	{
@@ -1432,6 +1405,13 @@ namespace SSD_Components
 		if (got == FPtable.end())
 			return false;
 		else return true;
+	}
+
+	float Deduplicator::Get_DedupRate()
+	{
+		std::cout << "# of total chunks: " << Total_chunk_no << std::endl;
+		std::cout << "# of unique chunks: " << Total_chunk_no - Dup_chunk_no << std::endl;
+		return float(Dup_chunk_no) / (Total_chunk_no);
 	}
 
 	ChunkInfo Deduplicator::GetChunkInfo(FP_type FP)
