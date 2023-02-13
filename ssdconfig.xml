@@ -30,8 +30,8 @@
 		<Plane_Allocation_Scheme>CWDP</Plane_Allocation_Scheme>
 		<Transaction_Scheduling_Policy>PRIORITY_OUT_OF_ORDER</Transaction_Scheduling_Policy>
 		<Overprovisioning_Ratio>0.07</Overprovisioning_Ratio>
-		<GC_Exec_Threshold>0.05000</GC_Exec_Threshold>
-		<GC_Block_Selection_Policy>RGA</GC_Block_Selection_Policy>
+		<GC_Exec_Threshold>0.997</GC_Exec_Threshold>
+		<GC_Block_Selection_Policy>GREEDY</GC_Block_Selection_Policy>
 		<Use_Copyback_for_GC>false</Use_Copyback_for_GC>
 		<Preemptible_GC_Enabled>false</Preemptible_GC_Enabled>
 		<GC_Hard_Threshold>0.005000</GC_Hard_Threshold>
@@ -41,10 +41,10 @@
 		<Preferred_suspend_erase_time_for_read>700000</Preferred_suspend_erase_time_for_read>
 		<Preferred_suspend_erase_time_for_write>700000</Preferred_suspend_erase_time_for_write>
 		<Preferred_suspend_write_time_for_read>100000</Preferred_suspend_write_time_for_read>
-		<Flash_Channel_Count>8</Flash_Channel_Count>
+		<Flash_Channel_Count>4</Flash_Channel_Count>
 		<Flash_Channel_Width>1</Flash_Channel_Width>
 		<Channel_Transfer_Rate>333</Channel_Transfer_Rate>
-		<Chip_No_Per_Channel>4</Chip_No_Per_Channel>
+		<Chip_No_Per_Channel>2</Chip_No_Per_Channel>
 		<Flash_Comm_Protocol>NVDDR2</Flash_Comm_Protocol>
 		<Flash_Parameter_Set>
 			<Flash_Technology>MLC</Flash_Technology>
@@ -61,8 +61,8 @@
 			<Suspend_Program_Time>100000</Suspend_Program_Time>
 			<Die_No_Per_Chip>2</Die_No_Per_Chip>
 			<Plane_No_Per_Die>2</Plane_No_Per_Die>
-			<Block_No_Per_Plane>2048</Block_No_Per_Plane>
-			<Page_No_Per_Block>256</Page_No_Per_Block>
+			<Block_No_Per_Plane>1024</Block_No_Per_Plane>
+			<Page_No_Per_Block>2</Page_No_Per_Block>
 			<Page_Capacity>1024</Page_Capacity>
 			<Page_Metadat_Capacity>448</Page_Metadat_Capacity>
 		</Flash_Parameter_Set>

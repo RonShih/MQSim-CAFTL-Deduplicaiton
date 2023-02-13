@@ -54,7 +54,7 @@ namespace SSD_Components
 		size_t ref;//number of this chunk appear
 	}; 
 
-	struct RMEntryType//** Append for CAFTL reverse mapping
+	struct RMEntryType//** Append for CAFTL reverse mapping, it replaces metadata in OOB
 	{
 		FP_type FP;
 		LPA_type LPA;
@@ -67,12 +67,13 @@ namespace SSD_Components
 	public:
 		Deduplicator();
 		~Deduplicator();
-		void Update_FPtable(std::pair<FP_type, ChunkInfo> FP_entry);
+		void Update_FPtable(const std::pair<FP_type, ChunkInfo> &FP_entry);
 		void Print_FPtable();
-		bool In_FPtable(FP_type FP);//** Check if this FP exists in hash table
-		ChunkInfo GetChunkInfo(FP_type FP);
+		bool In_FPtable(const FP_type &FP);//** Check if this FP exists in hash table
+		ChunkInfo GetChunkInfo(const FP_type &FP);
 		float Get_DedupRate();
 
+		size_t Chunking_size;
 		size_t Total_chunk_no;
 		size_t Dup_chunk_no;
 		
@@ -172,12 +173,22 @@ namespace SSD_Components
 		Deduplicator *deduplicator;
 		std::map<VPA_type, SMTEntryType> SecondaryMappingTable;//** For CAFTL 2-level mapping while GMT as Primary Mapping Table in CAFTL. It should be inserted as pair <VPA, PPA>
 		std::map<PPA_type, RMEntryType> ReverseMapping;//** Simplify read operation for metadata in OOB e.g., FP by using <PPA, FP> structure to update FP table
-		void Update_ReverseMapping(std::pair<PPA_type, RMEntryType> cur_rev_pair);
+		void Update_ReverseMapping(const std::pair<PPA_type, RMEntryType> &cur_rev_pair);
+		void Delete_ReverseMapping(const PPA_type &target_ppa);
 		void Print_ReverseMapping();
+		void Get_metadata_from_ReverseMapping(const PPA_type &moving_ppa, RMEntryType &metadata);
 		void Print_PMT();
 		void Print_SMT();
 		bool In_SMT(VPA_type VPA);
 		SMTEntryType Get_SMTEntry(VPA_type VPA);
+		void Update_SMT(const std::pair<VPA_type, SMTEntryType> &cur_SMT_pair);
+		void Print_Mappings_Detail() {
+			deduplicator->Print_FPtable();
+			Print_SMT();
+			Print_SMT();
+			Print_ReverseMapping();
+		}
+
 		std::ifstream fp_input_file;//** Append for CAFTL fp input
 		FP_type cur_fp;//** Record current fp
 		size_t Write_with_fp_no;

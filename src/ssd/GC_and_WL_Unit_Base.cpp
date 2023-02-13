@@ -135,7 +135,7 @@ namespace SSD_Components
 						_my_instance->tsu->Submit_transaction(((NVM_Transaction_Flash_RD*)transaction)->RelatedWrite);
 						_my_instance->tsu->Schedule();
 					} else {
-						PRINT_ERROR("Inconsistency found when moving a page for GC/WL!")
+						//PRINT_ERROR("Inconsistency found when moving a page for GC/WL!")
 					}
 				}
 				break;
