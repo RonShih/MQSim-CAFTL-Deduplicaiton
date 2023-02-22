@@ -1,7 +1,8 @@
 #include "../../sim/Sim_Defs.h"
 #include "../../sim/Engine.h"
 #include "Flash_Chip.h"
-
+#include "../../exec/SSD_Device.h"
+#include "../../ssd/Address_Mapping_Unit_Page_Level.h"
 
 namespace NVM
 {
@@ -145,6 +146,20 @@ namespace NVM
 				}
 			}
 
+
+			//** Append for CAFTL
+			Physical_Page_Address Addr;
+			Addr.ChannelID = ChannelID;
+			Addr.ChipID = ChipID;
+			Addr.DieID = die_no;
+			
+
+			size_t page_no_per_chip = glob_Page_No_Per_Block * glob_Block_No_Per_Plane * glob_Plane_No_Per_Die * glob_Die_No_Per_Chip;
+			size_t page_no_per_die = glob_Page_No_Per_Block * glob_Block_No_Per_Plane * glob_Plane_No_Per_Die;
+			size_t page_no_per_plane = glob_Page_No_Per_Block * glob_Block_No_Per_Plane;
+
+			PPA_type ppa;
+			
 			switch (command->CommandCode)
 			{
 				case CMD_READ_PAGE:
@@ -155,7 +170,28 @@ namespace NVM
 					for (unsigned int planeCntr = 0; planeCntr < command->Address.size(); planeCntr++) {
 						STAT_readCount++;
 						targetDie->Planes[command->Address[planeCntr].PlaneID]->Read_count++;
-						targetDie->Planes[command->Address[planeCntr].PlaneID]->Blocks[command->Address[planeCntr].BlockID]->Pages[command->Address[planeCntr].PageID].Read_metadata(command->Meta_data[planeCntr]);
+
+						//** Append for CAFTL
+						Addr.PlaneID = command->Address[planeCntr].PlaneID;
+						Addr.BlockID = command->Address[planeCntr].BlockID;
+						Addr.PageID = command->Address[planeCntr].PageID;
+
+						ppa = page_no_per_chip * (Addr.ChannelID * glob_Chip_No_Per_Channel + Addr.ChipID) + page_no_per_die * Addr.DieID + page_no_per_plane * Addr.PlaneID + glob_Page_No_Per_Block * Addr.BlockID + Addr.PageID;
+						
+						if (SSD_Components::In_SMT(ppa))
+							ppa = SSD_Components::Get_SMTEntry(ppa).PPA;
+
+						LPA_type lpa;
+						
+						SSD_Components::Get_LPA_from_ReverseMapping(ppa, lpa);
+						//PRINT_MESSAGE(ppa << " " << lpa);
+
+						if (command->Meta_data[planeCntr].LPA == 18446744073709551615)
+							PRINT_MESSAGE("here");
+
+						targetDie->Planes[command->Address[planeCntr].PlaneID]->Blocks[command->Address[planeCntr].BlockID]->Pages[command->Address[planeCntr].PageID].Metadata.LPA = lpa;
+
+						//targetDie->Planes[command->Address[planeCntr].PlaneID]->Blocks[command->Address[planeCntr].BlockID]->Pages[command->Address[planeCntr].PageID].Read_metadata(command->Meta_data[planeCntr]);
 					}
 					break;
 				case CMD_PROGRAM_PAGE:
@@ -176,10 +212,18 @@ namespace NVM
 						STAT_eraseCount++;
 						targetDie->Planes[command->Address[planeCntr].PlaneID]->Erase_count++;
 						Block* targetBlock = targetDie->Planes[command->Address[planeCntr].PlaneID]->Blocks[command->Address[planeCntr].BlockID];
+						//**Append for CAFTL
+						//Addr.PlaneID = command->Address[planeCntr].PlaneID;
+						//Addr.BlockID = command->Address[planeCntr].BlockID;
 						for (unsigned int i = 0; i < page_no_per_block; i++) {
 							//targetBlock->Pages[i].Metadata.SourceStreamID = NO_STREAM;
 							//targetBlock->Pages[i].Metadata.Status = FREE_PAGE;
 							targetBlock->Pages[i].Metadata.LPA = NO_LPA;
+					
+							//**Append for CAFTL
+							//Addr.PageID = command->Address[planeCntr].PageID;
+							//ppa = page_no_per_chip * (Addr.ChannelID * glob_Chip_No_Per_Channel + Addr.ChipID) + page_no_per_die * Addr.DieID + page_no_per_plane * Addr.PlaneID + glob_Page_No_Per_Block * Addr.BlockID + Addr.PageID;	
+							//SSD_Components::Delete_ReverseMapping(ppa);
 						}
 					}
 					break;

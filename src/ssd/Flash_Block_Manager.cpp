@@ -11,10 +11,16 @@ namespace SSD_Components
 		: Flash_Block_Manager_Base(gc_and_wl_unit, max_allowed_block_erase_count, total_concurrent_streams_no, channel_count, chip_no_per_channel, die_no_per_chip,
 			plane_no_per_die, block_no_per_plane, page_no_per_block)
 	{
+		total_gc_page_write_no = 0;
+		total_erase_count = 0;
 	}
 
 	Flash_Block_Manager::~Flash_Block_Manager()
 	{
+		std::cout << "============ Flash_Block_Manager Output ============\n";
+		std::cout << "Total blocks: " << channel_count * chip_no_per_channel * die_no_per_chip * plane_no_per_die * block_no_per_plane << std::endl;
+		std::cout << "Total erase count: " << total_erase_count << std::endl;
+		std::cout << "Total gc page write: " << total_gc_page_write_no << std::endl;
 	}
 
 	void Flash_Block_Manager::Allocate_block_and_page_in_plane_for_user_write(const stream_id_type stream_id, NVM::FlashMemory::Physical_Page_Address& page_address)
@@ -24,15 +30,16 @@ namespace SSD_Components
 		plane_record->Free_pages_count--;		
 		page_address.BlockID = plane_record->Data_wf[stream_id]->BlockID;
 		page_address.PageID = plane_record->Data_wf[stream_id]->Current_page_write_index++;
+		
+		//std::cout << "Write tr issue to: [" << page_address.ChannelID << "," << page_address.ChipID << "," << page_address.DieID << "," << page_address.PlaneID << "," << page_address.BlockID << "," << page_address.PageID << "]\n";
 		program_transaction_issued(page_address);
-
+		
 		//The current write frontier block is written to the end
 		if(plane_record->Data_wf[stream_id]->Current_page_write_index == pages_no_per_block) {
 			//Assign a new write frontier block
 			plane_record->Data_wf[stream_id] = plane_record->Get_a_free_block(stream_id, false);
 			gc_and_wl_unit->Check_gc_required(plane_record->Get_free_block_pool_size(), page_address);
 		}
-
 		plane_record->Check_bookkeeping_correctness(page_address);
 	}
 
@@ -43,7 +50,7 @@ namespace SSD_Components
 		plane_record->Free_pages_count--;		
 		page_address.BlockID = plane_record->GC_wf[stream_id]->BlockID;
 		page_address.PageID = plane_record->GC_wf[stream_id]->Current_page_write_index++;
-
+		total_gc_page_write_no++;
 		
 		//The current write frontier block is written to the end
 		if (plane_record->GC_wf[stream_id]->Current_page_write_index == pages_no_per_block) {
@@ -95,6 +102,8 @@ namespace SSD_Components
 		plane_record->Free_pages_count--;
 		page_address.BlockID = plane_record->Translation_wf[streamID]->BlockID;
 		page_address.PageID = plane_record->Translation_wf[streamID]->Current_page_write_index++;
+
+		//std::cout << "Write tr issue to: [" << page_address.ChannelID << "," << page_address.ChipID << "," << page_address.DieID << "," << page_address.PlaneID << "," << page_address.BlockID << "," << page_address.PageID << "]\n";
 		program_transaction_issued(page_address);
 
 		//The current write frontier block for translation pages is written to the end
@@ -140,6 +149,7 @@ namespace SSD_Components
 
 		Stats::Block_erase_histogram[block_address.ChannelID][block_address.ChipID][block_address.DieID][block_address.PlaneID][block->Erase_count]--;
 		block->Erase();
+		total_erase_count++;
 		Stats::Block_erase_histogram[block_address.ChannelID][block_address.ChipID][block_address.DieID][block_address.PlaneID][block->Erase_count]++;
 		plane_record->Add_to_free_block_pool(block, gc_and_wl_unit->Use_dynamic_wearleveling());
 		plane_record->Check_bookkeeping_correctness(block_address);

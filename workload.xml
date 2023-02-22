@@ -3,11 +3,11 @@
 	<IO_Scenario>
 		<IO_Flow_Parameter_Set_Trace_Based>
 			<Priority_Class>HIGH</Priority_Class>
-			<Device_Level_Data_Caching_Mode>WRITE_CACHE</Device_Level_Data_Caching_Mode>
-			<Channel_IDs>0,1,2,3</Channel_IDs>
-			<Chip_IDs>0,1</Chip_IDs>
-			<Die_IDs>0,1</Die_IDs>
-			<Plane_IDs>0,1</Plane_IDs>
+			<Device_Level_Data_Caching_Mode>TURNED_OFF</Device_Level_Data_Caching_Mode>
+			<Channel_IDs>0</Channel_IDs>
+			<Chip_IDs>0</Chip_IDs>
+			<Die_IDs>0</Die_IDs>
+			<Plane_IDs>0</Plane_IDs>
 			<Initial_Occupancy_Percentage>70</Initial_Occupancy_Percentage>
 			<File_Path>traces/tpcc-small.trace</File_Path>
 			<Percentage_To_Be_Executed>100</Percentage_To_Be_Executed>

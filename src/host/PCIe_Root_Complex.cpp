@@ -4,12 +4,19 @@
 namespace Host_Components
 {
 	PCIe_Root_Complex::PCIe_Root_Complex(PCIe_Link* pcie_link, HostInterface_Types SSD_device_type, SATA_HBA* sata_hba, std::vector<Host_Components::IO_Flow_Base*>* IO_flows) :
-		pcie_link(pcie_link), SSD_device_type(SSD_device_type), sata_hba(sata_hba), IO_flows(IO_flows) {}
+		pcie_link(pcie_link), SSD_device_type(SSD_device_type), sata_hba(sata_hba), IO_flows(IO_flows) {
+		read_pcie_msg_num = 0;
+		write_pcie_msg_num = 0;
+		nvme_io_req_num = 0;
+		nvme_io_req_OOR_num = 0;
+	}
 
 	void PCIe_Root_Complex::Write_to_memory(const uint64_t address, const void* payload)
 	{
 		//This is a request to write back a read request data into memory (in modern systems the write is done to LLC)
 		if (address >= DATA_MEMORY_REGION) {
+			nvme_io_req_OOR_num++;
+			//PRINT_MESSAGE("NVMe_consume_io_request OOR: " << nvme_io_req_OOR_num);
 			//nothing to do
 		} else {
 			switch (SSD_device_type) {
@@ -17,6 +24,7 @@ namespace Host_Components
 				{
 					unsigned int flow_id = QUEUE_ID_TO_FLOW_ID(((Completion_Queue_Entry*)payload)->SQ_ID);
 					((*IO_flows)[flow_id])->NVMe_consume_io_request((Completion_Queue_Entry*)payload);
+					nvme_io_req_num++;
 					break;
 				}
 				case HostInterface_Types::SATA:

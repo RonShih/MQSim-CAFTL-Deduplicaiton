@@ -26,6 +26,13 @@
 *
 *********************************************************************************************************/
 
+static size_t glob_Flash_Channel_Count;
+static size_t glob_Chip_No_Per_Channel;
+static size_t glob_Die_No_Per_Chip;
+static size_t glob_Plane_No_Per_Die;
+static size_t glob_Block_No_Per_Plane;
+static size_t glob_Page_No_Per_Block;
+
 class SSD_Device : public MQSimEngine::Sim_Object, public MQSimEngine::Sim_Reporter
 {
 public:

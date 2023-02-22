@@ -24,12 +24,19 @@ namespace Host_Components
 			int tlp_max_payload_size = 128,
 			int dllp_ovehread = 6,
 			int ph_overhead = 2);
+		~PCIe_Link()
+		{
+			PRINT_MESSAGE("pcie_msg_to_host_num: " << pcie_msg_to_host_num);
+			PRINT_MESSAGE("pcie_msg_to_device_num: " << pcie_msg_to_device_num);
+		}
 		void Deliver(PCIe_Message*);
 		void Start_simulation();
 		void Validate_simulation_config();
 		void Execute_simulator_event(MQSimEngine::Sim_Event*);
 		void Set_root_complex(PCIe_Root_Complex*);
 		void Set_pcie_switch(PCIe_Switch*);
+		size_t pcie_msg_to_host_num;
+		size_t pcie_msg_to_device_num;
 	private:
 		PCIe_Root_Complex* root_complex;
 		PCIe_Switch* pcie_switch;

@@ -19,15 +19,24 @@ namespace Host_Components
 	{
 	public:
 		PCIe_Root_Complex(PCIe_Link* pcie_link, HostInterface_Types SSD_device_type, SATA_HBA* sata_hba, std::vector<Host_Components::IO_Flow_Base*>* IO_flows);
-		
+		~PCIe_Root_Complex() {
+			PRINT_MESSAGE("================ NVMe request to host related output ================");
+			PRINT_MESSAGE("read_pcie_msg_num: " << read_pcie_msg_num);
+			PRINT_MESSAGE("write_pcie_msg_num: " << write_pcie_msg_num);
+			PRINT_MESSAGE("In write req: ")
+			PRINT_MESSAGE("	NVMe_consume_io_request OOR: " << nvme_io_req_OOR_num);
+			PRINT_MESSAGE("	NVMe_consume_io_request: " << nvme_io_req_num);
+		}
 		void Consume_pcie_message(PCIe_Message* messages)//Modern processors support DDIO, where all writes to memory are going through LLC
 		{
 			switch (messages->Type)
 			{
 			case PCIe_Message_Type::READ_REQ:
+				read_pcie_msg_num++;
 				Read_from_memory(messages->Address, (unsigned int)(intptr_t)messages->Payload);
 				break;
 			case PCIe_Message_Type::WRITE_REQ:
+				write_pcie_msg_num++;
 				Write_to_memory(messages->Address, messages->Payload);
 				break;
 			default:
@@ -38,6 +47,13 @@ namespace Host_Components
 		
 		void Write_to_device(uint64_t address, uint16_t write_value);
 		void Set_io_flows(std::vector<Host_Components::IO_Flow_Base*>* IO_flows);
+
+		//Append for testing: 
+		size_t read_pcie_msg_num;
+		size_t write_pcie_msg_num;
+		size_t nvme_io_req_num; 
+		size_t nvme_io_req_OOR_num;
+
 	private:
 		PCIe_Link* pcie_link;
 		HostInterface_Types SSD_device_type;

@@ -2,6 +2,7 @@
 #include "../sim/Engine.h"
 #include "NVM_PHY_ONFI_NVDDR2.h"
 #include "Stats.h"
+#include "Address_Mapping_Unit_Page_Level.h"
 
 namespace SSD_Components {
 	/*hack: using this style to emulate event/delegate*/
@@ -174,7 +175,22 @@ namespace SSD_Components {
 			dieBKE->ActiveTransactions.push_back(*it);
 			dieBKE->ActiveCommand->Address.push_back((*it)->Address);
 			NVM::FlashMemory::PageMetadata metadata;
-			metadata.LPA = (*it)->LPA;
+			//** Append for CAFTL
+			//metadata.LPA = (*it)->LPA;
+			//RMEntryType rm_metadata;
+			//Get_metadata_from_ReverseMapping((*it)->PPA, rm_metadata);
+			if ((*it)->PPA == 18446744073709551615)
+			{
+				PRINT_MESSAGE("here");
+			}
+			if(In_SMT((*it)->PPA))
+				Get_LPA_from_ReverseMapping(Get_SMTEntry((*it)->PPA).PPA, metadata.LPA);
+			else
+				Get_LPA_from_ReverseMapping((*it)->PPA, metadata.LPA);
+			//if ((*it)->PPA == 0)
+				//PRINT_MESSAGE("h");
+
+			//PRINT_MESSAGE("PPA: " << (*it)->PPA << ", Metadata LPA: " << metadata.LPA);
 			dieBKE->ActiveCommand->Meta_data.push_back(metadata);
 		}
 

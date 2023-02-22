@@ -1,5 +1,5 @@
 #include "GC_and_WL_Unit_Base.h"
-
+#include "Address_Mapping_Unit_Page_Level.h"
 namespace SSD_Components
 {
 	GC_and_WL_Unit_Base* GC_and_WL_Unit_Base::_my_instance;
@@ -32,7 +32,10 @@ namespace SSD_Components
 			block_pool_gc_threshold = max_ongoing_gc_reqs_per_plane;
 		}
 	}
-
+	GC_and_WL_Unit_Base::~GC_and_WL_Unit_Base()
+	{
+	
+	}
 	void GC_and_WL_Unit_Base::Setup_triggers()
 	{
 		Sim_Object::Setup_triggers();
@@ -51,17 +54,24 @@ namespace SSD_Components
 				{
 					case Transaction_Type::READ:
 						_my_instance->block_manager->Read_transaction_serviced(transaction->Address);
+						//std::cout << "LPA: " << transaction->LPA << std::endl;
+						//std::cout << "Service read tr: [" << transaction->Address.ChannelID << "," << transaction->Address.ChipID << "," << transaction->Address.DieID << "," << transaction->Address.PlaneID << "," << transaction->Address.BlockID << "," << transaction->Address.PageID << "]\n";
 						break;
 					case Transaction_Type::WRITE:
 						_my_instance->block_manager->Program_transaction_serviced(transaction->Address);
+						//std::cout << "LPA: " << transaction->LPA << std::endl;
+						//std::cout << "Service write tr: [" << transaction->Address.ChannelID << "," << transaction->Address.ChipID << "," << transaction->Address.DieID << "," << transaction->Address.PlaneID << "," << transaction->Address.BlockID << "," << transaction->Address.PageID << "]\n";
 						break;
 					default:
 						PRINT_ERROR("Unexpected situation in the GC_and_WL_Unit_Base function!")
 				}
 				if (_my_instance->block_manager->Block_has_ongoing_gc_wl(transaction->Address)) {
 					if (_my_instance->block_manager->Can_execute_gc_wl(transaction->Address)) {
+						PRINT_MESSAGE("Can_execute_gc_wl");
 						NVM::FlashMemory::Physical_Page_Address gc_wl_candidate_address(transaction->Address);
 						Block_Pool_Slot_Type* block = &pbke->Blocks[transaction->Address.BlockID];
+						PRINT_MESSAGE("In block: " << block->BlockID << ", invalid page num: " << block->Invalid_page_count);
+						
 						Stats::Total_gc_executions++;
 						_my_instance->tsu->Prepare_for_transaction_submit();
 						NVM_Transaction_Flash_ER* gc_wl_erase_tr = new NVM_Transaction_Flash_ER(Transaction_Source_Type::GC_WL, block->Stream_id, gc_wl_candidate_address);
@@ -91,20 +101,26 @@ namespace SSD_Components
 										_my_instance->tsu->Submit_transaction(gc_wl_read);//Only the read transaction would be submitted. The Write transaction is submitted when the read transaction is finished and the LPA of the target page is determined
 									}
 									gc_wl_erase_tr->Page_movement_activities.push_back(gc_wl_write);
+									//std::cout << gc_wl_candidate_address.ChannelID << gc_wl_erase_tr->Page_movement_activities.size() << std::endl;
 								}
 							}
 						}
+						//PRINT_MESSAGE("Size of page movements (in handle_transaction_serviced_signal_from_PHY): " << gc_wl_erase_tr->Page_movement_activities.size());
+
 						block->Erase_transaction = gc_wl_erase_tr;
+						_my_instance->tsu->Submit_transaction(gc_wl_erase_tr);
 						_my_instance->tsu->Schedule();
 					}
 				}
 
 				return;
 		}
-
+		Block_Pool_Slot_Type* block = &pbke->Blocks[transaction->Address.BlockID];
+		//PRINT_MESSAGE("In block: " << block->BlockID << ", invalid page num: " << block->Invalid_page_count);
 		switch (transaction->Type) {
 			case Transaction_Type::READ:
 			{
+				//PRINT_MESSAGE("GC read");
 				PPA_type ppa;
 				MPPN_type mppa;
 				page_status_type page_status_bitmap;
@@ -123,6 +139,12 @@ namespace SSD_Components
 						PRINT_ERROR("Inconsistency found when moving a page for GC/WL!")
 					}
 				} else {
+					if (transaction->LPA == 18446744073709551615)
+					{
+						PRINT_MESSAGE("here");
+						Print_SMT();
+						Print_ReverseMapping();
+					}
 					_my_instance->address_mapping_unit->Get_data_mapping_info_for_gc(transaction->Stream_id, transaction->LPA, ppa, page_status_bitmap);
 					
 					//There has been no write on the page since GC start, and it is still valid
@@ -131,16 +153,21 @@ namespace SSD_Components
 						((NVM_Transaction_Flash_RD*)transaction)->RelatedWrite->write_sectors_bitmap = page_status_bitmap;
 						((NVM_Transaction_Flash_RD*)transaction)->RelatedWrite->LPA = transaction->LPA;
 						((NVM_Transaction_Flash_RD*)transaction)->RelatedWrite->RelatedRead = NULL;
+						//PRINT_MESSAGE("GC read: " << transaction->LPA << " " << transaction->PPA);
 						_my_instance->address_mapping_unit->Allocate_new_page_for_gc(((NVM_Transaction_Flash_RD*)transaction)->RelatedWrite, pbke->Blocks[transaction->Address.BlockID].Holds_mapping_data);
 						_my_instance->tsu->Submit_transaction(((NVM_Transaction_Flash_RD*)transaction)->RelatedWrite);
 						_my_instance->tsu->Schedule();
+						//PRINT_MESSAGE(transaction->LPA << " " << ppa << " " << transaction->PPA);
 					} else {
+						//PRINT_MESSAGE(transaction->LPA << " " << ppa << " " << transaction->PPA);
+						//PRINT_MESSAGE("GC read: " << transaction->LPA << " " << transaction->PPA);
 						//PRINT_ERROR("Inconsistency found when moving a page for GC/WL!")
 					}
 				}
 				break;
 			}
 			case Transaction_Type::WRITE:
+				//PRINT_MESSAGE("GC write");
 				if (pbke->Blocks[((NVM_Transaction_Flash_WR*)transaction)->RelatedErase->Address.BlockID].Holds_mapping_data) {
 					_my_instance->address_mapping_unit->Remove_barrier_for_accessing_mvpn(transaction->Stream_id, (MVPN_type)transaction->LPA);
 					DEBUG(Simulator->Time() << ": MVPN=" << (MVPN_type)transaction->LPA << " unlocked!!");
@@ -149,6 +176,8 @@ namespace SSD_Components
 					DEBUG(Simulator->Time() << ": LPA=" << (MVPN_type)transaction->LPA << " unlocked!!");
 				}
 				pbke->Blocks[((NVM_Transaction_Flash_WR*)transaction)->RelatedErase->Address.BlockID].Erase_transaction->Page_movement_activities.remove((NVM_Transaction_Flash_WR*)transaction);
+				//PRINT_MESSAGE("GC write: " << transaction->LPA << " " << transaction->PPA);
+				//PRINT_MESSAGE("Size of page movements after write " << pbke->Blocks[((NVM_Transaction_Flash_WR*)transaction)->RelatedErase->Address.BlockID].Erase_transaction->Page_movement_activities.size());
 				break;
 			case Transaction_Type::ERASE:
 				pbke->Ongoing_erase_operations.erase(pbke->Ongoing_erase_operations.find(transaction->Address.BlockID));

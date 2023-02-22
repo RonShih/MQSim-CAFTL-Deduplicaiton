@@ -13,6 +13,8 @@ namespace Host_Components
 		tlp_header_size(tlp_header_size), tlp_max_payload_size(tlp_max_payload_size), dllp_ovehread(dllp_ovehread), ph_overhead(ph_overhead)
 	{
 		packet_overhead = ph_overhead + dllp_ovehread + tlp_header_size;
+		pcie_msg_to_host_num = 0;
+		pcie_msg_to_device_num = 0;
 	}
 
 	void PCIe_Link::Set_root_complex(PCIe_Root_Complex* root_complex)
@@ -59,6 +61,7 @@ namespace Host_Components
 			case PCIe_Destination_Type::HOST:
 				message = Message_buffer_toward_root_complex.front();
 				Message_buffer_toward_root_complex.pop();
+				pcie_msg_to_host_num++;
 				root_complex->Consume_pcie_message(message);
 				if (Message_buffer_toward_root_complex.size() > 0) {//There are active transfers
 					Simulator->Register_sim_event(Simulator->Time() + estimate_transfer_time(Message_buffer_toward_root_complex.front()),
@@ -68,6 +71,7 @@ namespace Host_Components
 			case PCIe_Destination_Type::DEVICE:
 				message = Message_buffer_toward_ssd_device.front();
 				Message_buffer_toward_ssd_device.pop();
+				pcie_msg_to_device_num++;
 				pcie_switch->Deliver_to_device(message);
 				if (Message_buffer_toward_ssd_device.size() > 0) {
 					Simulator->Register_sim_event(Simulator->Time() + estimate_transfer_time(Message_buffer_toward_ssd_device.front()),

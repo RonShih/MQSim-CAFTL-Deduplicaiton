@@ -60,6 +60,7 @@ namespace SSD_Components
 		LPA_type LPA;
 		VPA_type VPA;
 		bool use_SMT;//For unique chunk but using two-level mapping (ref decreases to 1)
+		bool is_full_page;//Distinguish if its full write or partial write
 	};
 
 	class Deduplicator//** Append for CAFTL
@@ -73,7 +74,6 @@ namespace SSD_Components
 		ChunkInfo GetChunkInfo(const FP_type &FP);
 		float Get_DedupRate();
 
-		size_t Chunking_size;
 		size_t Total_chunk_no;
 		size_t Dup_chunk_no;
 		
@@ -111,6 +111,21 @@ namespace SSD_Components
 	* However, CMT is shared among concurrent streams in two ways: 1) each address mapping domain
 	* shares the whole CMT space with other domains, and 2) each address mapping domain has
 	* its own share of CMT (equal partitioning of CMT space among concurrent streams).*/
+
+	static std::map<PPA_type, RMEntryType> ReverseMapping;//** Simplify read operation for metadata in OOB e.g., FP by using <PPA, FP> structure to update FP table
+	void Update_ReverseMapping(const std::pair<PPA_type, RMEntryType> &cur_rev_pair);
+	void Delete_ReverseMapping(const PPA_type &target_ppa);
+	void Print_ReverseMapping();
+	void Get_metadata_from_ReverseMapping(const PPA_type &moving_ppa, RMEntryType &metadata);
+	void Get_LPA_from_ReverseMapping(const PPA_type &target_ppa, LPA_type &LPA);
+
+	static std::map<VPA_type, SMTEntryType> SecondaryMappingTable;//** For CAFTL 2-level mapping while GMT as Primary Mapping Table in CAFTL. It should be inserted as pair <VPA, PPA>
+	
+	void Print_SMT();
+	bool In_SMT(VPA_type VPA);
+	SMTEntryType Get_SMTEntry(VPA_type VPA);
+	void Update_SMT(const std::pair<VPA_type, SMTEntryType> &cur_SMT_pair);
+
 	class AddressMappingDomain
 	{
 	public:
@@ -168,33 +183,26 @@ namespace SSD_Components
 		LPA_type Total_logical_pages_no;
 		PPA_type Total_physical_pages_no;
 		MVPN_type Total_translation_pages_no;
+		void Print_PMT();
 
 		//** Append for CAFTL
 		Deduplicator *deduplicator;
-		std::map<VPA_type, SMTEntryType> SecondaryMappingTable;//** For CAFTL 2-level mapping while GMT as Primary Mapping Table in CAFTL. It should be inserted as pair <VPA, PPA>
-		std::map<PPA_type, RMEntryType> ReverseMapping;//** Simplify read operation for metadata in OOB e.g., FP by using <PPA, FP> structure to update FP table
-		void Update_ReverseMapping(const std::pair<PPA_type, RMEntryType> &cur_rev_pair);
-		void Delete_ReverseMapping(const PPA_type &target_ppa);
-		void Print_ReverseMapping();
-		void Get_metadata_from_ReverseMapping(const PPA_type &moving_ppa, RMEntryType &metadata);
-		void Print_PMT();
-		void Print_SMT();
-		bool In_SMT(VPA_type VPA);
-		SMTEntryType Get_SMTEntry(VPA_type VPA);
-		void Update_SMT(const std::pair<VPA_type, SMTEntryType> &cur_SMT_pair);
+		
 		void Print_Mappings_Detail() {
 			deduplicator->Print_FPtable();
-			Print_SMT();
+			Print_PMT();
 			Print_SMT();
 			Print_ReverseMapping();
 		}
 
 		std::ifstream fp_input_file;//** Append for CAFTL fp input
 		FP_type cur_fp;//** Record current fp
-		size_t Write_with_fp_no;
+		//size_t Write_with_fp_no;
 		size_t Total_fp_no;//** Total number of fingerprints
-		size_t Total_write_page_no;//** Including partial and full write
-		size_t Full_write_page_no;//** Not including partial write
+		size_t Total_page_write_no;//** partial and full write, including GC write 
+		//size_t Partial_write_page_no;
+		size_t GC_page_write_no;
+		//size_t GC_Partial_write_page_no;
 	};
 
 	class Address_Mapping_Unit_Page_Level : public Address_Mapping_Unit_Base
@@ -237,8 +245,10 @@ namespace SSD_Components
 		void Remove_barrier_for_accessing_mvpn(stream_id_type stream_id, MVPN_type mpvn);
 		void Start_servicing_writes_for_overfull_plane(const NVM::FlashMemory::Physical_Page_Address plane_address);
 
-		
-		
+		//** Append for CAFTL
+		size_t total_write;
+		size_t total_read;
+		size_t read_before_write;
 	private:
 		static Address_Mapping_Unit_Page_Level* _my_instance;
 		unsigned int cmt_capacity;

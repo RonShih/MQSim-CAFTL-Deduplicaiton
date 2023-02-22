@@ -31,6 +31,7 @@ namespace SSD_Components
 	public:
 		flash_block_ID_type BlockID;
 		flash_page_ID_type Current_page_write_index;
+		bool block_full; //** Append for CAFTL
 		Block_Service_Status Current_status;
 		unsigned int Invalid_page_count;
 		unsigned int Erase_count;
@@ -108,6 +109,10 @@ namespace SSD_Components
 		unsigned int block_no_per_plane;
 		unsigned int pages_no_per_block;
 		void program_transaction_issued(const NVM::FlashMemory::Physical_Page_Address& page_address);//Updates the block bookkeeping record
+
+		//** Append for CAFTL
+		size_t total_gc_page_write_no;
+		size_t total_erase_count;
 	};
 }
 

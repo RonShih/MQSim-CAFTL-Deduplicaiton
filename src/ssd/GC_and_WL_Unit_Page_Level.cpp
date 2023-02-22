@@ -44,7 +44,7 @@ namespace SSD_Components
 	{
 		if (free_block_pool_size < block_pool_gc_threshold) {
 			flash_block_ID_type gc_candidate_block_id = block_manager->Get_coldest_block_id(plane_address);
-			PlaneBookKeepingType* pbke = block_manager->Get_plane_bookkeeping_entry(plane_address);
+			PlaneBookKeepingType* pbke = block_manager->Get_plane_bookkeeping_entry(plane_address);	
 
 			if (pbke->Ongoing_erase_operations.size() >= max_ongoing_gc_reqs_per_plane) {
 				return;
@@ -134,23 +134,27 @@ namespace SSD_Components
 			if (pbke->Ongoing_erase_operations.find(gc_candidate_block_id) != pbke->Ongoing_erase_operations.end()) {
 				return;
 			}
-			
+
 			NVM::FlashMemory::Physical_Page_Address gc_candidate_address(plane_address);
 			gc_candidate_address.BlockID = gc_candidate_block_id;
 			Block_Pool_Slot_Type* block = &pbke->Blocks[gc_candidate_block_id];
 
 			//No invalid page to erase
 			if (block->Current_page_write_index == 0 || block->Invalid_page_count == 0) {
+				//std::cout << "Over GC threshold but can't do GC\n";
 				return;
 			}
-			
+			std::cout << "Victim block: [" << gc_candidate_address.ChannelID << "," << gc_candidate_address.ChipID << "," << gc_candidate_address.DieID << "," << gc_candidate_address.PlaneID << "," << gc_candidate_block_id << "]\n";
+			PRINT_MESSAGE("Invalid page count: " << block->Invalid_page_count);
 			//Run the state machine to protect against race condition
 			block_manager->GC_WL_started(gc_candidate_address);
 			pbke->Ongoing_erase_operations.insert(gc_candidate_block_id);
 			address_mapping_unit->Set_barrier_for_accessing_physical_block(gc_candidate_address);//Lock the block, so no user request can intervene while the GC is progressing
-			
+
 			//If there are ongoing requests targeting the candidate block, the gc execution should be postponed
 			if (block_manager->Can_execute_gc_wl(gc_candidate_address)) {
+				
+				std::cout << "Can_execute_gc_wl\n";
 				Stats::Total_gc_executions++;
 				tsu->Prepare_for_transaction_submit();
 
@@ -169,6 +173,7 @@ namespace SSD_Components
 								gc_write->ExecutionMode = WriteExecutionModeType::COPYBACK;
 								tsu->Submit_transaction(gc_write);
 							} else {
+								//PRINT_MESSAGE("Moving page ID: " << pageID);
 								gc_read = new NVM_Transaction_Flash_RD(Transaction_Source_Type::GC_WL, block->Stream_id, sector_no_per_page * SECTOR_SIZE_IN_BYTE,
 									NO_LPA, address_mapping_unit->Convert_address_to_ppa(gc_candidate_address), gc_candidate_address, NULL, 0, NULL, 0, INVALID_TIME_STAMP);
 								gc_write = new NVM_Transaction_Flash_WR(Transaction_Source_Type::GC_WL, block->Stream_id, sector_no_per_page * SECTOR_SIZE_IN_BYTE,
@@ -176,17 +181,31 @@ namespace SSD_Components
 								gc_write->ExecutionMode = WriteExecutionModeType::SIMPLE;
 								gc_write->RelatedErase = gc_erase_tr;
 								gc_read->RelatedWrite = gc_write;
+								//PRINT_MESSAGE(gc_read->LPA << " " << gc_read->PPA)
 								tsu->Submit_transaction(gc_read);//Only the read transaction would be submitted. The Write transaction is submitted when the read transaction is finished and the LPA of the target page is determined
 							}
 							gc_erase_tr->Page_movement_activities.push_back(gc_write);
 						}
 					}
 				}
+				//PRINT_MESSAGE("Size of page movement (in Check_gc_required): " << gc_erase_tr->Page_movement_activities.size());
+
+				//PRINT_MESSAGE("page movements ppa:");
+				//for (NVM_Transaction_Flash_WR* itr : gc_erase_tr->Page_movement_activities)
+					//PRINT_MESSAGE(address_mapping_unit->Convert_address_to_ppa(itr->Address));
 				block->Erase_transaction = gc_erase_tr;
 				tsu->Submit_transaction(gc_erase_tr);
-
 				tsu->Schedule();
 			}
+			else
+			{
+				std::cout << "GC postponed because ongoing requests targeting the candidate block\n";
+				PRINT_MESSAGE(block_manager->plane_manager[gc_candidate_address.ChannelID][gc_candidate_address.ChipID][gc_candidate_address.DieID][gc_candidate_address.PlaneID].Blocks->Ongoing_user_program_count);
+				PRINT_MESSAGE(block_manager->plane_manager[gc_candidate_address.ChannelID][gc_candidate_address.ChipID][gc_candidate_address.DieID][gc_candidate_address.PlaneID].Blocks->Ongoing_user_read_count);
+				//std::cout << block_manager->plane_manager[gc_candidate_address.ChannelID][gc_candidate_address.ChipID][gc_candidate_address.DieID][gc_candidate_address.PlaneID].Blocks->Ongoing_user_program_count << " ";
+				//std::cout << block_manager->plane_manager[gc_candidate_address.ChannelID][gc_candidate_address.ChipID][gc_candidate_address.DieID][gc_candidate_address.PlaneID].Blocks->Ongoing_user_read_count << "\n";
+			}
+			
 		}
 	}
 }

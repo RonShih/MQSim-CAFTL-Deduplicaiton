@@ -116,6 +116,15 @@ SSD_Device::SSD_Device(Device_Parameter_Set *parameters, std::vector<IO_Flow_Par
 														   parameters->Flash_Parameters.Block_No_Per_Plane, parameters->Flash_Parameters.Page_No_Per_Block,
 														   parameters->Flash_Parameters.Page_Capacity / SECTOR_SIZE_IN_BYTE, average_flash_read_latency, average_flash_write_latency, parameters->Overprovisioning_Ratio,
 														   parameters->Flash_Parameters.Block_PE_Cycles_Limit, parameters->Seed++);
+
+		//**Append for CAFTL
+		glob_Flash_Channel_Count = parameters->Flash_Channel_Count;
+		glob_Chip_No_Per_Channel = parameters->Chip_No_Per_Channel;
+		glob_Die_No_Per_Chip = parameters->Flash_Parameters.Die_No_Per_Chip;
+		glob_Plane_No_Per_Die = parameters->Flash_Parameters.Plane_No_Per_Die;
+		glob_Block_No_Per_Plane = parameters->Flash_Parameters.Block_No_Per_Plane;
+		glob_Page_No_Per_Block = parameters->Flash_Parameters.Page_No_Per_Block;
+
 		ftl->PHY = (SSD_Components::NVM_PHY_ONFI *)PHY;
 		Simulator->AddObject(ftl);
 		device->Firmware = ftl;

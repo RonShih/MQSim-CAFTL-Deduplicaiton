@@ -32,6 +32,7 @@ namespace SSD_Components
 						for (unsigned int blockID = 0; blockID < block_no_per_plane; blockID++) {
 							plane_manager[channelID][chipID][dieID][planeID].Blocks[blockID].BlockID = blockID;
 							plane_manager[channelID][chipID][dieID][planeID].Blocks[blockID].Current_page_write_index = 0;
+							plane_manager[channelID][chipID][dieID][planeID].Blocks[blockID].block_full = false;
 							plane_manager[channelID][chipID][dieID][planeID].Blocks[blockID].Current_status = Block_Service_Status::IDLE;
 							plane_manager[channelID][chipID][dieID][planeID].Blocks[blockID].Invalid_page_count = 0;
 							plane_manager[channelID][chipID][dieID][planeID].Blocks[blockID].Erase_count = 0;
@@ -189,6 +190,7 @@ namespace SSD_Components
 	bool Flash_Block_Manager_Base::Can_execute_gc_wl(const NVM::FlashMemory::Physical_Page_Address& block_address)
 	{
 		PlaneBookKeepingType *plane_record = &plane_manager[block_address.ChannelID][block_address.ChipID][block_address.DieID][block_address.PlaneID];
+		//std::cout << plane_record->Blocks[block_address.BlockID].Ongoing_user_program_count + plane_record->Blocks[block_address.BlockID].Ongoing_user_read_count << std::endl;
 		return (plane_record->Blocks[block_address.BlockID].Ongoing_user_program_count + plane_record->Blocks[block_address.BlockID].Ongoing_user_read_count == 0);
 	}
 	
@@ -202,24 +204,31 @@ namespace SSD_Components
 	{
 		PlaneBookKeepingType *plane_record = &plane_manager[page_address.ChannelID][page_address.ChipID][page_address.DieID][page_address.PlaneID];
 		plane_record->Blocks[page_address.BlockID].Ongoing_user_program_count++;
+		//std::cout << "After issue: Ongoing_user_program_count = " << plane_record->Blocks[page_address.BlockID].Ongoing_user_program_count << std::endl;
+		//std::cout << page_address.ChannelID << page_address.ChipID << page_address.DieID << page_address.PlaneID << page_address.BlockID << page_address.PageID << std::endl;
+		//std::cout << plane_record->Blocks[page_address.BlockID].Ongoing_user_program_count << std::endl;
 	}
 	
 	void Flash_Block_Manager_Base::Read_transaction_issued(const NVM::FlashMemory::Physical_Page_Address& page_address)
 	{
 		PlaneBookKeepingType *plane_record = &plane_manager[page_address.ChannelID][page_address.ChipID][page_address.DieID][page_address.PlaneID];
 		plane_record->Blocks[page_address.BlockID].Ongoing_user_read_count++;
+		//std::cout << "Read tr issue to: [" << page_address.ChannelID << "," << page_address.ChipID << "," << page_address.DieID << "," << page_address.PlaneID << "," << page_address.BlockID << "," << page_address.PageID << "]\n";
+		//std::cout << "After issue: Ongoing_user_program_count = " << plane_record->Blocks[page_address.BlockID].Ongoing_user_read_count << std::endl;
 	}
 
 	void Flash_Block_Manager_Base::Program_transaction_serviced(const NVM::FlashMemory::Physical_Page_Address& page_address)
 	{
 		PlaneBookKeepingType *plane_record = &plane_manager[page_address.ChannelID][page_address.ChipID][page_address.DieID][page_address.PlaneID];
 		plane_record->Blocks[page_address.BlockID].Ongoing_user_program_count--;
+		//std::cout << "After serviced: Ongoing_user_program_count = " << plane_record->Blocks[page_address.BlockID].Ongoing_user_program_count << std::endl;
 	}
 
 	void Flash_Block_Manager_Base::Read_transaction_serviced(const NVM::FlashMemory::Physical_Page_Address& page_address)
 	{
 		PlaneBookKeepingType *plane_record = &plane_manager[page_address.ChannelID][page_address.ChipID][page_address.DieID][page_address.PlaneID];
 		plane_record->Blocks[page_address.BlockID].Ongoing_user_read_count--;
+		//std::cout << "After serviced: Ongoing_user_read_count = " << plane_record->Blocks[page_address.BlockID].Ongoing_user_read_count << std::endl;
 	}
 	
 	bool Flash_Block_Manager_Base::Is_having_ongoing_program(const NVM::FlashMemory::Physical_Page_Address& block_address)

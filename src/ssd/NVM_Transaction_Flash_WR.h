@@ -34,6 +34,9 @@ namespace SSD_Components
 		page_status_type write_sectors_bitmap;
 		data_timestamp_type DataTimeStamp;
 		WriteExecutionModeType ExecutionMode;
+
+		//** Append for CAFTL
+		bool dedup_wr; //If LPA got dedup, this write should be discarded
 	};
 }
 
