@@ -139,12 +139,6 @@ namespace SSD_Components
 						PRINT_ERROR("Inconsistency found when moving a page for GC/WL!")
 					}
 				} else {
-					if (transaction->LPA == 18446744073709551615)
-					{
-						PRINT_MESSAGE("here");
-						Print_SMT();
-						Print_ReverseMapping();
-					}
 					_my_instance->address_mapping_unit->Get_data_mapping_info_for_gc(transaction->Stream_id, transaction->LPA, ppa, page_status_bitmap);
 					
 					//There has been no write on the page since GC start, and it is still valid

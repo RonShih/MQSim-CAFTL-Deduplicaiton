@@ -17,7 +17,7 @@ namespace SSD_Components
 
 	Flash_Block_Manager::~Flash_Block_Manager()
 	{
-		std::cout << "============ Flash_Block_Manager Output ============\n";
+		std::cout << "\n============ Flash_Block_Manager Output ============\n";
 		std::cout << "Total blocks: " << channel_count * chip_no_per_channel * die_no_per_chip * plane_no_per_die * block_no_per_plane << std::endl;
 		std::cout << "Total erase count: " << total_erase_count << std::endl;
 		std::cout << "Total gc page write: " << total_gc_page_write_no << std::endl;

@@ -27,7 +27,7 @@ namespace SSD_Components
 	unsigned int***** Stats::Block_erase_histogram;
 	unsigned int  Stats::CMT_hits = 0, Stats::readTR_CMT_hits = 0, Stats::writeTR_CMT_hits = 0;
 	unsigned int  Stats::CMT_miss = 0, Stats::readTR_CMT_miss = 0, Stats::writeTR_CMT_miss = 0;
-	unsigned int  Stats::total_CMT_queries = 0, Stats::total_readTR_CMT_queries = 0, Stats::total_writeTR_CMT_queries = 0;
+	unsigned int  Stats::total_CMT_queries = 0, Stats::Total_readTR_CMT_queries = 0, Stats::Total_writeTR_CMT_queries = 0;
 
 	unsigned int Stats::Total_gc_executions = 0, Stats::Total_gc_executions_per_stream[MAX_SUPPORT_STREAMS] = { 0 };
 	unsigned int Stats::Total_page_movements_for_gc = 0, Stats::Total_gc_page_movements_per_stream[MAX_SUPPORT_STREAMS] = { 0 };
@@ -37,7 +37,7 @@ namespace SSD_Components
 
 	unsigned int Stats::CMT_hits_per_stream[MAX_SUPPORT_STREAMS] = { 0 }, Stats::readTR_CMT_hits_per_stream[MAX_SUPPORT_STREAMS] = { 0 }, Stats::writeTR_CMT_hits_per_stream[MAX_SUPPORT_STREAMS] = { 0 };
 	unsigned int Stats::CMT_miss_per_stream[MAX_SUPPORT_STREAMS] = { 0 }, Stats::readTR_CMT_miss_per_stream[MAX_SUPPORT_STREAMS] = { 0 }, Stats::writeTR_CMT_miss_per_stream[MAX_SUPPORT_STREAMS] = { 0 };
-	unsigned int Stats::total_CMT_queries_per_stream[MAX_SUPPORT_STREAMS] = { 0 }, Stats::total_readTR_CMT_queries_per_stream[MAX_SUPPORT_STREAMS] = { 0 }, Stats::total_writeTR_CMT_queries_per_stream[MAX_SUPPORT_STREAMS] = { 0 };
+	unsigned int Stats::total_CMT_queries_per_stream[MAX_SUPPORT_STREAMS] = { 0 }, Stats::Total_readTR_CMT_queries_per_stream[MAX_SUPPORT_STREAMS] = { 0 }, Stats::Total_writeTR_CMT_queries_per_stream[MAX_SUPPORT_STREAMS] = { 0 };
 
 
 	void Stats::Init_stats(unsigned int channel_no, unsigned int chip_no_per_channel, unsigned int die_no_per_chip, unsigned int plane_no_per_die, 
@@ -68,7 +68,7 @@ namespace SSD_Components
 		Total_flash_reads_for_mapping = 0; Total_flash_writes_for_mapping = 0; 
 		CMT_hits = 0; readTR_CMT_hits = 0; writeTR_CMT_hits = 0;
 		CMT_miss = 0; readTR_CMT_miss = 0; writeTR_CMT_miss = 0;
-		total_CMT_queries = 0; total_readTR_CMT_queries = 0; total_writeTR_CMT_queries = 0;
+		total_CMT_queries = 0; Total_readTR_CMT_queries = 0; Total_writeTR_CMT_queries = 0;
 
 		Total_gc_executions = 0;  Total_page_movements_for_gc = 0;
 		Total_wl_executions = 0;  Total_page_movements_for_wl = 0;
@@ -78,7 +78,7 @@ namespace SSD_Components
 			Total_flash_writes_for_mapping_per_stream[stream_id] = 0;
 			CMT_hits_per_stream[stream_id] = 0; readTR_CMT_hits_per_stream[stream_id] = 0; writeTR_CMT_hits_per_stream[stream_id] = 0;
 			CMT_miss_per_stream[stream_id] = 0; readTR_CMT_miss_per_stream[stream_id] = 0;  writeTR_CMT_miss_per_stream[stream_id] = 0;
-			total_CMT_queries_per_stream[stream_id] = 0; total_readTR_CMT_queries_per_stream[stream_id] = 0; total_writeTR_CMT_queries_per_stream[stream_id] = 0;
+			total_CMT_queries_per_stream[stream_id] = 0; Total_readTR_CMT_queries_per_stream[stream_id] = 0; Total_writeTR_CMT_queries_per_stream[stream_id] = 0;
 			Total_gc_executions_per_stream[stream_id] = 0;
 			Total_gc_page_movements_per_stream[stream_id] = 0;
 			Total_wl_executions_per_stream[stream_id] = 0;

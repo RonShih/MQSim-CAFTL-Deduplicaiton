@@ -99,7 +99,7 @@ namespace SSD_Components
 
 	void Data_Cache_Manager_Flash_Advanced::Do_warmup(std::vector<Utils::Workload_Statistics*> workload_stats)
 	{
-		double total_write_arrival_rate = 0, total_read_arrival_rate = 0;
+		double Total_write_arrival_rate = 0, Total_read_arrival_rate = 0;
 		switch (sharing_mode) {
 			case Cache_Sharing_Mode::SHARED:
 				//Estimate read arrival and write arrival rate

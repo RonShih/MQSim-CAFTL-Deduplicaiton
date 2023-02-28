@@ -63,7 +63,7 @@
 			<Plane_No_Per_Die>1</Plane_No_Per_Die>
 			<Block_No_Per_Plane>4096</Block_No_Per_Plane>
 			<Page_No_Per_Block>128</Page_No_Per_Block>
-			<Page_Capacity>1024</Page_Capacity>
+			<Page_Capacity>4096</Page_Capacity>
 			<Page_Metadat_Capacity>448</Page_Metadat_Capacity>
 		</Flash_Parameter_Set>
 	</Device_Parameter_Set>

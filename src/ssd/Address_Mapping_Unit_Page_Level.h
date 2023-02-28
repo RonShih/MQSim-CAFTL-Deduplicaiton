@@ -74,8 +74,8 @@ namespace SSD_Components
 		ChunkInfo GetChunkInfo(const FP_type &FP);
 		float Get_DedupRate();
 
-		size_t Total_chunk_no;
-		size_t Dup_chunk_no;
+		size_t Total_chunk_no;//total chunk(page), including unique and deduped chunks
+		size_t Dup_chunk_no;//discarded chunks
 		
 	private: 
 		std::unordered_map<FP_type, ChunkInfo> FPtable;
@@ -125,6 +125,11 @@ namespace SSD_Components
 	bool In_SMT(VPA_type VPA);
 	SMTEntryType Get_SMTEntry(VPA_type VPA);
 	void Update_SMT(const std::pair<VPA_type, SMTEntryType> &cur_SMT_pair);
+
+	/* Latency (microsecond) */
+	const float page_FP_latency = 6.4; 
+	const float page_write_latency = 200;
+	const float page_read_latency = 25;
 
 	class AddressMappingDomain
 	{
@@ -197,12 +202,13 @@ namespace SSD_Components
 
 		std::ifstream fp_input_file;//** Append for CAFTL fp input
 		FP_type cur_fp;//** Record current fp
-		//size_t Write_with_fp_no;
-		size_t Total_fp_no;//** Total number of fingerprints
+		size_t Total_fp_no;//** Total number of fingerprints by trace
+
 		size_t Total_page_write_no;//** partial and full write, including GC write 
-		//size_t Partial_write_page_no;
 		size_t GC_page_write_no;
-		//size_t GC_Partial_write_page_no;
+
+		float Total_write_time;//** latency with FPing
+		float Total_read_time;
 	};
 
 	class Address_Mapping_Unit_Page_Level : public Address_Mapping_Unit_Base
@@ -246,8 +252,8 @@ namespace SSD_Components
 		void Start_servicing_writes_for_overfull_plane(const NVM::FlashMemory::Physical_Page_Address plane_address);
 
 		//** Append for CAFTL
-		size_t total_write;
-		size_t total_read;
+		size_t Total_write;
+		size_t Total_read;
 		size_t read_before_write;
 	private:
 		static Address_Mapping_Unit_Page_Level* _my_instance;

@@ -186,8 +186,8 @@ namespace NVM
 						SSD_Components::Get_LPA_from_ReverseMapping(ppa, lpa);
 						//PRINT_MESSAGE(ppa << " " << lpa);
 
-						if (command->Meta_data[planeCntr].LPA == 18446744073709551615)
-							PRINT_MESSAGE("here");
+						//if (command->Meta_data[planeCntr].LPA == 18446744073709551615)
+							//PRINT_MESSAGE("here");
 
 						targetDie->Planes[command->Address[planeCntr].PlaneID]->Blocks[command->Address[planeCntr].BlockID]->Pages[command->Address[planeCntr].PageID].Metadata.LPA = lpa;
 

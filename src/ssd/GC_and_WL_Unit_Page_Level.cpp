@@ -200,8 +200,8 @@ namespace SSD_Components
 			else
 			{
 				std::cout << "GC postponed because ongoing requests targeting the candidate block\n";
-				PRINT_MESSAGE(block_manager->plane_manager[gc_candidate_address.ChannelID][gc_candidate_address.ChipID][gc_candidate_address.DieID][gc_candidate_address.PlaneID].Blocks->Ongoing_user_program_count);
-				PRINT_MESSAGE(block_manager->plane_manager[gc_candidate_address.ChannelID][gc_candidate_address.ChipID][gc_candidate_address.DieID][gc_candidate_address.PlaneID].Blocks->Ongoing_user_read_count);
+				//PRINT_MESSAGE(block_manager->plane_manager[gc_candidate_address.ChannelID][gc_candidate_address.ChipID][gc_candidate_address.DieID][gc_candidate_address.PlaneID].Blocks->Ongoing_user_program_count);
+				//PRINT_MESSAGE(block_manager->plane_manager[gc_candidate_address.ChannelID][gc_candidate_address.ChipID][gc_candidate_address.DieID][gc_candidate_address.PlaneID].Blocks->Ongoing_user_read_count);
 				//std::cout << block_manager->plane_manager[gc_candidate_address.ChannelID][gc_candidate_address.ChipID][gc_candidate_address.DieID][gc_candidate_address.PlaneID].Blocks->Ongoing_user_program_count << " ";
 				//std::cout << block_manager->plane_manager[gc_candidate_address.ChannelID][gc_candidate_address.ChipID][gc_candidate_address.DieID][gc_candidate_address.PlaneID].Blocks->Ongoing_user_read_count << "\n";
 			}

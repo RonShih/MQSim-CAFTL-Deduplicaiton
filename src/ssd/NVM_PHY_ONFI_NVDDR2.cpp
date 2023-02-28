@@ -176,13 +176,6 @@ namespace SSD_Components {
 			dieBKE->ActiveCommand->Address.push_back((*it)->Address);
 			NVM::FlashMemory::PageMetadata metadata;
 			//** Append for CAFTL
-			//metadata.LPA = (*it)->LPA;
-			//RMEntryType rm_metadata;
-			//Get_metadata_from_ReverseMapping((*it)->PPA, rm_metadata);
-			if ((*it)->PPA == 18446744073709551615)
-			{
-				PRINT_MESSAGE("here");
-			}
 			if(In_SMT((*it)->PPA))
 				Get_LPA_from_ReverseMapping(Get_SMTEntry((*it)->PPA).PPA, metadata.LPA);
 			else

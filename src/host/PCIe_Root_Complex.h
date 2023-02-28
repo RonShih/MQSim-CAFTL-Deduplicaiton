@@ -20,7 +20,7 @@ namespace Host_Components
 	public:
 		PCIe_Root_Complex(PCIe_Link* pcie_link, HostInterface_Types SSD_device_type, SATA_HBA* sata_hba, std::vector<Host_Components::IO_Flow_Base*>* IO_flows);
 		~PCIe_Root_Complex() {
-			PRINT_MESSAGE("================ NVMe request to host related output ================");
+			PRINT_MESSAGE("\n================ NVMe request to host related output ================");
 			PRINT_MESSAGE("read_pcie_msg_num: " << read_pcie_msg_num);
 			PRINT_MESSAGE("write_pcie_msg_num: " << write_pcie_msg_num);
 			PRINT_MESSAGE("In write req: ")

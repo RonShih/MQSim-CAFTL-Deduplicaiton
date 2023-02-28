@@ -862,11 +862,11 @@ namespace SSD_Components
 		xmlwriter.Write_attribute_string_inline(attr, val);
 
 		attr = "Total_CMT_Queries_For_Reads";
-		val = std::to_string(Stats::total_readTR_CMT_queries);
+		val = std::to_string(Stats::Total_readTR_CMT_queries);
 		xmlwriter.Write_attribute_string_inline(attr, val);
 
 		attr = "Total_CMT_Queries_For_Writes";
-		val = std::to_string(Stats::total_writeTR_CMT_queries);
+		val = std::to_string(Stats::Total_writeTR_CMT_queries);
 		xmlwriter.Write_attribute_string_inline(attr, val);
 
 		attr = "Total_GC_Executions";
