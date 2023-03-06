@@ -225,7 +225,7 @@ namespace SSD_Components
 		//** Append for CAFTL
 		deduplicator = new Deduplicator();
 
-		FP_type fp_input_file_path = "C:\\Users\\Ron\\Desktop\\fp_output.txt";
+		FP_type fp_input_file_path = "C:\\Users\\Ron\\Desktop\\page_fp_output.txt";
 		fp_input_file.open(fp_input_file_path);//** append
 		Total_fp_no = 0;
 		while (std::getline(fp_input_file, cur_fp))
@@ -427,7 +427,7 @@ namespace SSD_Components
 			PRINT_MESSAGE("* Setting:");
 			PRINT_MESSAGE("Page size (chunking size): " << page_size_in_byte);
 			PRINT_MESSAGE("Total physical pages no: " << total_physical_pages_no);
-			PRINT_MESSAGE("Flash space (GB): " << (float)(total_physical_pages_no * page_size_in_byte)/1024.0/1024.0/1024.0);
+			PRINT_MESSAGE("Flash space (GB): " << float((page_size_in_byte / 1024.0) * total_physical_pages_no / 1024.0 / 1024.0));
 			PRINT_MESSAGE("Total fingerprints num: " << domains[i]->Total_fp_no);
 			PRINT_MESSAGE("\n* Page I/O:");
 			PRINT_MESSAGE("Total read tr: " << Total_read);
@@ -437,9 +437,9 @@ namespace SSD_Components
 			PRINT_MESSAGE(" - Write no (after dedup): " << domains[i]->deduplicator->Total_chunk_no - domains[i]->deduplicator->Dup_chunk_no);
 			PRINT_MESSAGE(" - Dedup Rate: " << domains[i]->deduplicator->Get_DedupRate() * 100.0 << "%");
 			PRINT_MESSAGE("\n* GC:");
-			//PRINT_MESSAGE("GC page write: " << domains[i]->GC_page_write_no);
 			PRINT_MESSAGE("Total gc executions (from STATs): " << Stats::Total_gc_executions);
-			PRINT_MESSAGE("Total page movements for gc (from STATs): " << Stats::Total_page_movements_for_gc);
+			PRINT_MESSAGE("GC page write: " << domains[i]->GC_page_write_no);
+			//PRINT_MESSAGE("Total page movements for gc (from STATs): " << Stats::Total_page_movements_for_gc);
 			PRINT_MESSAGE("\n* Page I/O with GC:");
 			PRINT_MESSAGE("Total pages write num (including GC write): " << domains[i]->deduplicator->Total_chunk_no + domains[i]->GC_page_write_no);
 			PRINT_MESSAGE("Actual pages write num (including GC write): " << domains[i]->deduplicator->Total_chunk_no - domains[i]->deduplicator->Dup_chunk_no + domains[i]->GC_page_write_no);
@@ -592,6 +592,7 @@ namespace SSD_Components
 			if (translate_lpa_to_ppa(stream_id, transaction)) {
 				return true;
 			} else {
+				PRINT_ERROR("unsuccessful tr");
 				mange_unsuccessful_translation(transaction);
 				return false;
 			}
@@ -646,26 +647,27 @@ namespace SSD_Components
 		PPA_type ppa = domains[streamID]->Get_ppa(ideal_mapping_table, streamID, transaction->LPA);
 		((NVM_Transaction_Flash_WR*)transaction)->dedup_wr;
 		if (transaction->Type == Transaction_Type::READ) {
-			Total_read++;
 			if (ppa == NO_PPA) {
 				read_before_write++;
+				Total_write++;
 				//PRINT_MESSAGE("NO PPA, create write for read: ");
 				ppa = online_create_entry_for_reads(transaction->LPA, streamID, transaction->Address, ((NVM_Transaction_Flash_RD*)transaction)->read_sectors_bitmap);
 			}
 			transaction->PPA = ppa;
 			Convert_ppa_to_address(transaction->PPA, transaction->Address);
 			block_manager->Read_transaction_issued(transaction->Address);
+			Total_read++;
 			domain->Total_read_time += page_read_latency;
 			transaction->Physical_address_determined = true;
 			return true;
-		} else {//This is a write transaction
-			Total_write++;
+		} else {//This is a write transaction	
 			allocate_plane_for_user_write((NVM_Transaction_Flash_WR*)transaction);
 			//there are too few free pages remaining only for GC
 			if (ftl->GC_and_WL_Unit->Stop_servicing_writes(transaction->Address)){
 				return false;
 			}
 			allocate_page_in_plane_for_user_write((NVM_Transaction_Flash_WR*)transaction, false);
+			Total_write++;
 			transaction->Physical_address_determined = true;
 			return true;
 		}
@@ -1275,21 +1277,19 @@ namespace SSD_Components
 			domain->Total_write_time += page_write_latency;
 		}
 		else {//Its full page write and not GC
-		
-			if (old_ppa != NO_PPA){
+			if (old_ppa != NO_PPA) {
 				if (In_SMT(old_ppa))//If this ppa is converted into vpa already
 					old_ppa = Get_SMTEntry(old_ppa).PPA;//fetch ppa but not vpa
 				FP_type old_fp = ReverseMapping[old_ppa].FP;//Get its fingerprint by RM
-				ChunkInfo old_chunk = domain->deduplicator->GetChunkInfo(old_fp);//For updation of old_fp info in FPtable
+				if (!domain->deduplicator->In_FPtable(old_fp))//Avoid invalidating the invalid page, since when ref == 0, this fp entry will be erased.
+					return;
+				ChunkInfo old_chunk = domain->deduplicator->GetChunkInfo(old_fp);//For updation of old_fp info in FPtable  
 				old_chunk.ref -= 1;//Assume this LPA will ref to another PPA
 				std::pair<FP_type, ChunkInfo> target_pair(old_fp, old_chunk);//Create FP pair to update FPtable
 				domain->deduplicator->Update_FPtable(target_pair);//Update old fp ref, if the ref == 0 after updation this fp entry will be erased
 
 				if (old_chunk.ref == 0)//Should this PPA got invalid? If it gots multiple LPA ref this PPA, this PPA should not be invalid
-					PPA_invalid = true;//PPA should be invalid
-				else return;//duplicate LPA still can be deduped
-
-				if (PPA_invalid == true){
+				{
 					page_status_type prev_page_status = domain->Get_page_status(ideal_mapping_table, transaction->Stream_id, transaction->LPA);
 					page_status_type status_intersection = transaction->write_sectors_bitmap & prev_page_status;
 					//check if an update read is required
@@ -2166,7 +2166,7 @@ namespace SSD_Components
 
 	inline void Address_Mapping_Unit_Page_Level::Set_barrier_for_accessing_physical_block(const NVM::FlashMemory::Physical_Page_Address& block_address)
 	{
-		std::cout << "Set barrier for accesing LPA: \n";
+		//std::cout << "Set barrier for accesing LPA: \n";
 		//The LPAs are actually not known until they are read one-by-one from flash storage. But, to reduce MQSim's complexity, we assume that LPAs are stored in DRAM and thus no read from flash storage is needed.
 		Block_Pool_Slot_Type* block = &(block_manager->plane_manager[block_address.ChannelID][block_address.ChipID][block_address.DieID][block_address.PlaneID].Blocks[block_address.BlockID]);
 		NVM::FlashMemory::Physical_Page_Address addr(block_address);

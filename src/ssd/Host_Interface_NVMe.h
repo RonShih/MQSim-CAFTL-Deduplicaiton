@@ -79,6 +79,10 @@ private:
 	uint32_t number_of_sent_cqe;
 };
 
+//** Append for CAFTL
+static size_t LBA_req_read_count = 0;
+static size_t LBA_req_write_count = 0;
+
 class Host_Interface_NVMe : public Host_Interface_Base
 {
 	friend class Input_Stream_Manager_NVMe;
@@ -88,6 +92,11 @@ public:
 	Host_Interface_NVMe(const sim_object_id_type &id, LHA_type max_logical_sector_address,
 						uint16_t submission_queue_depth, uint16_t completion_queue_depth,
 						unsigned int no_of_input_streams, uint16_t queue_fetch_size, unsigned int sectors_per_page, Data_Cache_Manager_Base *cache);
+	~Host_Interface_NVMe()//** Append for CAFTL
+	{
+		PRINT_MESSAGE("\n* Trace Related Info: ")
+		PRINT_MESSAGE("LBA read: " << LBA_req_read_count << "\nLBA write: " << LBA_req_write_count);
+	}
 	stream_id_type Create_new_stream(IO_Flow_Priority_Class::Priority priority_class, LHA_type start_logical_sector_address, LHA_type end_logical_sector_address,
 									 uint64_t submission_queue_base_address, uint64_t completion_queue_base_address);
 	void Start_simulation();

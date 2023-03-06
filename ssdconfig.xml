@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="us-ascii"?>
+<?xml version="1.0" encoding="utf-8"?>
 <Execution_Parameter_Set>
 	<Host_Parameter_Set>
 		<PCIe_Lane_Bandwidth>1.00000</PCIe_Lane_Bandwidth>
@@ -12,8 +12,8 @@
 		<Enabled_Preconditioning>false</Enabled_Preconditioning>
 		<Memory_Type>FLASH</Memory_Type>
 		<HostInterface_Type>NVME</HostInterface_Type>
-		<IO_Queue_Depth>65535</IO_Queue_Depth>
-		<Queue_Fetch_Size>512</Queue_Fetch_Size>
+		<IO_Queue_Depth>999999</IO_Queue_Depth>
+		<Queue_Fetch_Size>8192</Queue_Fetch_Size>
 		<Caching_Mechanism>SIMPLE</Caching_Mechanism>
 		<Data_Cache_Sharing_Mode>SHARED</Data_Cache_Sharing_Mode>
 		<Data_Cache_Capacity>268435456</Data_Cache_Capacity>
@@ -30,7 +30,7 @@
 		<Plane_Allocation_Scheme>CWDP</Plane_Allocation_Scheme>
 		<Transaction_Scheduling_Policy>PRIORITY_OUT_OF_ORDER</Transaction_Scheduling_Policy>
 		<Overprovisioning_Ratio>0.07</Overprovisioning_Ratio>
-		<GC_Exec_Threshold>0.995</GC_Exec_Threshold>
+		<GC_Exec_Threshold>0.9</GC_Exec_Threshold>
 		<GC_Block_Selection_Policy>GREEDY</GC_Block_Selection_Policy>
 		<Use_Copyback_for_GC>false</Use_Copyback_for_GC>
 		<Preemptible_GC_Enabled>false</Preemptible_GC_Enabled>
@@ -60,9 +60,9 @@
 			<Suspend_Erase_Time>700000</Suspend_Erase_Time>
 			<Suspend_Program_Time>100000</Suspend_Program_Time>
 			<Die_No_Per_Chip>1</Die_No_Per_Chip>
-			<Plane_No_Per_Die>1</Plane_No_Per_Die>
+			<Plane_No_Per_Die>2</Plane_No_Per_Die>
 			<Block_No_Per_Plane>4096</Block_No_Per_Plane>
-			<Page_No_Per_Block>128</Page_No_Per_Block>
+			<Page_No_Per_Block>256</Page_No_Per_Block>
 			<Page_Capacity>4096</Page_Capacity>
 			<Page_Metadat_Capacity>448</Page_Metadat_Capacity>
 		</Flash_Parameter_Set>

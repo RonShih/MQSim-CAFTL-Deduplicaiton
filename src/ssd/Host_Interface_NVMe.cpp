@@ -77,12 +77,16 @@ inline void Input_Stream_Manager_NVMe::Handle_new_arrived_request(User_Request *
 	{
 		((Input_Stream_NVMe *)input_streams[request->Stream_id])->Waiting_user_requests.push_back(request);
 		((Input_Stream_NVMe *)input_streams[request->Stream_id])->STAT_number_of_read_requests++;
+		for (int i = 0; i < request->SizeInSectors; i++)
+			LBA_req_read_count++;
 		segment_user_request(request);
 
 		((Host_Interface_NVMe *)host_interface)->broadcast_user_request_arrival_signal(request);
 	}
 	else
 	{ //This is a write request
+		for (int i = 0; i < request->SizeInSectors; i++)
+			LBA_req_write_count++;
 		((Input_Stream_NVMe *)input_streams[request->Stream_id])->Waiting_user_requests.push_back(request);
 		((Input_Stream_NVMe *)input_streams[request->Stream_id])->STAT_number_of_write_requests++;
 		((Host_Interface_NVMe *)host_interface)->request_fetch_unit->Fetch_write_data(request);

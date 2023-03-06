@@ -82,6 +82,25 @@ namespace SSD_Components
 		float Dedup_rate;
 	};
 
+	static std::map<PPA_type, RMEntryType> ReverseMapping;//** Simplify read operation for metadata in OOB e.g., FP by using <PPA, FP> structure to update FP table
+	void Update_ReverseMapping(const std::pair<PPA_type, RMEntryType> &cur_rev_pair);
+	void Delete_ReverseMapping(const PPA_type &target_ppa);
+	void Print_ReverseMapping();
+	void Get_metadata_from_ReverseMapping(const PPA_type &moving_ppa, RMEntryType &metadata);
+	void Get_LPA_from_ReverseMapping(const PPA_type &target_ppa, LPA_type &LPA);
+
+	static std::map<VPA_type, SMTEntryType> SecondaryMappingTable;//** For CAFTL 2-level mapping while GMT as Primary Mapping Table in CAFTL. It should be inserted as pair <VPA, PPA>
+
+	void Print_SMT();
+	bool In_SMT(VPA_type VPA);
+	SMTEntryType Get_SMTEntry(VPA_type VPA);
+	void Update_SMT(const std::pair<VPA_type, SMTEntryType> &cur_SMT_pair);
+
+	/* Latency (microsecond) */
+	const float page_FP_latency = 6.4;
+	const float page_write_latency = 200;
+	const float page_read_latency = 25;
+
 	class Cached_Mapping_Table
 	{
 	public:
@@ -111,25 +130,6 @@ namespace SSD_Components
 	* However, CMT is shared among concurrent streams in two ways: 1) each address mapping domain
 	* shares the whole CMT space with other domains, and 2) each address mapping domain has
 	* its own share of CMT (equal partitioning of CMT space among concurrent streams).*/
-
-	static std::map<PPA_type, RMEntryType> ReverseMapping;//** Simplify read operation for metadata in OOB e.g., FP by using <PPA, FP> structure to update FP table
-	void Update_ReverseMapping(const std::pair<PPA_type, RMEntryType> &cur_rev_pair);
-	void Delete_ReverseMapping(const PPA_type &target_ppa);
-	void Print_ReverseMapping();
-	void Get_metadata_from_ReverseMapping(const PPA_type &moving_ppa, RMEntryType &metadata);
-	void Get_LPA_from_ReverseMapping(const PPA_type &target_ppa, LPA_type &LPA);
-
-	static std::map<VPA_type, SMTEntryType> SecondaryMappingTable;//** For CAFTL 2-level mapping while GMT as Primary Mapping Table in CAFTL. It should be inserted as pair <VPA, PPA>
-	
-	void Print_SMT();
-	bool In_SMT(VPA_type VPA);
-	SMTEntryType Get_SMTEntry(VPA_type VPA);
-	void Update_SMT(const std::pair<VPA_type, SMTEntryType> &cur_SMT_pair);
-
-	/* Latency (microsecond) */
-	const float page_FP_latency = 6.4; 
-	const float page_write_latency = 200;
-	const float page_read_latency = 25;
 
 	class AddressMappingDomain
 	{
