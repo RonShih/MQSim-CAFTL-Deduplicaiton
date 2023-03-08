@@ -645,13 +645,17 @@ namespace SSD_Components
 	{
 		AddressMappingDomain* domain = domains[streamID];
 		PPA_type ppa = domains[streamID]->Get_ppa(ideal_mapping_table, streamID, transaction->LPA);
-		((NVM_Transaction_Flash_WR*)transaction)->dedup_wr;
 		if (transaction->Type == Transaction_Type::READ) {
 			if (ppa == NO_PPA) {
 				read_before_write++;
 				Total_write++;
 				//PRINT_MESSAGE("NO PPA, create write for read: ");
 				ppa = online_create_entry_for_reads(transaction->LPA, streamID, transaction->Address, ((NVM_Transaction_Flash_RD*)transaction)->read_sectors_bitmap);
+			}
+			else{
+				if (In_SMT(ppa)){
+					ppa = Get_SMTEntry(ppa).PPA;
+				}
 			}
 			transaction->PPA = ppa;
 			Convert_ppa_to_address(transaction->PPA, transaction->Address);
@@ -1717,6 +1721,7 @@ namespace SSD_Components
 				PRINT_ERROR("Unknown plane allocation scheme type!")
 		}
 		PPA_type ppa = Convert_address_to_ppa(read_address);
+
 		//** Append for CAFTL
 		//(1)hash table initialization (2)PPN->VPN (3)VPN-to-PPN mapping
 		bool PPA_invalid = false;
@@ -1735,7 +1740,8 @@ namespace SSD_Components
 				domain->Total_write_time += page_write_latency;
 				ppa = Convert_address_to_ppa(read_address);
 				cur_chunk = { ppa, 1 };//Insert first chunk of this entry of hash table
-				block_manager->Program_transaction_serviced(read_address);
+				
+				//block_manager->Program_transaction_serviced(read_address);
 			}
 			else {//Found duplication
 				use_SMT = true;
@@ -1748,6 +1754,7 @@ namespace SSD_Components
 					domain->Update_mapping_info(ideal_mapping_table, stream_id, old_lpa, VPA, domain->Get_page_status(ideal_mapping_table, stream_id, old_lpa));
 				}
 				domain->deduplicator->Dup_chunk_no++;
+				
 			}
 
 			FP_entry = { domain->cur_fp, cur_chunk };
@@ -1775,7 +1782,10 @@ namespace SSD_Components
 			//PlaneBookKeepingType *plane_record = &block_manager->plane_manager[transaction->Address.ChannelID][transaction->Address.ChipID][transaction->Address.DieID][transaction->Address.PlaneID];
 			//block_manager->gc_and_wl_unit->Check_gc_required(plane_record->Get_free_block_pool_size(), transaction->Address);
 		}
-		else;//No fingerprints
+		else {
+			return ppa;//Run out of fingerprints
+		};
+
 		return cur_chunk.PPA;
 	}
 
