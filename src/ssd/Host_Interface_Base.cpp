@@ -154,6 +154,10 @@ namespace SSD_Components
 		if (input_streams[stream_id]->STAT_number_of_write_transactions == 0) {
 			return 0;
 		}
+		//PRINT_MESSAGE(input_streams[stream_id]->STAT_sum_of_write_transactions_execution_time);
+		//PRINT_MESSAGE(input_streams[stream_id]->STAT_sum_of_write_transactions_transfer_time);
+		//PRINT_MESSAGE(input_streams[stream_id]->STAT_sum_of_write_transactions_waiting_time);
+		//PRINT_MESSAGE(input_streams[stream_id]->STAT_number_of_write_transactions);
 		return (uint32_t)((input_streams[stream_id]->STAT_sum_of_write_transactions_execution_time + input_streams[stream_id]->STAT_sum_of_write_transactions_transfer_time + input_streams[stream_id]->STAT_sum_of_write_transactions_waiting_time)
 			/ input_streams[stream_id]->STAT_number_of_write_transactions / SIM_TIME_TO_MICROSECONDS_COEFF);
 	}

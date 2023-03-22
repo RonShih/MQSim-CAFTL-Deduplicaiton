@@ -429,24 +429,33 @@ namespace SSD_Components
 			PRINT_MESSAGE("Total physical pages no: " << total_physical_pages_no);
 			PRINT_MESSAGE("Flash space (GB): " << float((page_size_in_byte / 1024.0) * total_physical_pages_no / 1024.0 / 1024.0));
 			PRINT_MESSAGE("Total fingerprints num: " << domains[i]->Total_fp_no);
+			PRINT_MESSAGE("Write latency: " << page_write_latency);
+			PRINT_MESSAGE("Read latency: " << page_read_latency);
+			PRINT_MESSAGE("FP latency: " << page_FP_latency);
+			
 			PRINT_MESSAGE("\n* Page I/O:");
 			PRINT_MESSAGE("Total read tr: " << Total_read);
-			PRINT_MESSAGE("Total write tr: " << Total_write);
+			PRINT_MESSAGE(" - Stats: Issued_Flash_Read_CMD: " << Stats::IssuedReadCMD);
 			PRINT_MESSAGE(" - Read before Write num: " << read_before_write);
-			PRINT_MESSAGE(" - Write no (without dedup): " << domains[i]->deduplicator->Total_chunk_no);
-			PRINT_MESSAGE(" - Write no (after dedup): " << domains[i]->deduplicator->Total_chunk_no - domains[i]->deduplicator->Dup_chunk_no);
+			PRINT_MESSAGE("Total write tr: " << Total_write);
+			PRINT_MESSAGE(" - Write no in chunks (without dedup): " << domains[i]->deduplicator->Total_chunk_no);
+			PRINT_MESSAGE(" - Write no in chunks (after dedup): " << domains[i]->deduplicator->Total_chunk_no - domains[i]->deduplicator->Dup_chunk_no);
+			PRINT_MESSAGE(" - Stats: Issued_Flash_Program_CMD (Excluding RBW): " << Stats::IssuedProgramCMD);
 			PRINT_MESSAGE(" - Dedup Rate: " << domains[i]->deduplicator->Get_DedupRate() * 100.0 << "%");
+			
 			PRINT_MESSAGE("\n* GC:");
-			PRINT_MESSAGE("Total gc executions (from STATs): " << Stats::Total_gc_executions);
-			PRINT_MESSAGE("GC page write: " << domains[i]->GC_page_write_no);
+			PRINT_MESSAGE("Stats: Total gc executions (from STATs): " << Stats::Total_gc_executions);
+			PRINT_MESSAGE("Stats: GC page write: " << Stats::Total_page_movements_for_gc);
 			//PRINT_MESSAGE("Total page movements for gc (from STATs): " << Stats::Total_page_movements_for_gc);
+			
 			PRINT_MESSAGE("\n* Page I/O with GC:");
 			PRINT_MESSAGE("Total pages write num (including GC write): " << domains[i]->deduplicator->Total_chunk_no + domains[i]->GC_page_write_no);
 			PRINT_MESSAGE("Actual pages write num (including GC write): " << domains[i]->deduplicator->Total_chunk_no - domains[i]->deduplicator->Dup_chunk_no + domains[i]->GC_page_write_no);
+			
 			PRINT_MESSAGE("\n* I/O Performance:");
 			PRINT_MESSAGE("Total write path latency (microsec) : " << domains[i]->Total_write_time);
 			PRINT_MESSAGE("Total read path latency: " << domains[i]->Total_read_time);
-			PRINT_MESSAGE("Avg write path latency: " << domains[i]->Total_write_time / (float)Total_write);
+			PRINT_MESSAGE("Avg write path latency: " << domains[i]->Total_write_time / (float)(Total_write + read_before_write));
 			PRINT_MESSAGE(" - Longest write latency: " << page_write_latency + page_FP_latency);
 			PRINT_MESSAGE("Avg read path latency: " << domains[i]->Total_read_time / (float)Total_read);
 			
@@ -592,7 +601,7 @@ namespace SSD_Components
 			if (translate_lpa_to_ppa(stream_id, transaction)) {
 				return true;
 			} else {
-				PRINT_ERROR("unsuccessful tr");
+				//PRINT_ERROR("unsuccessful tr");
 				mange_unsuccessful_translation(transaction);
 				return false;
 			}
@@ -648,7 +657,7 @@ namespace SSD_Components
 		if (transaction->Type == Transaction_Type::READ) {
 			if (ppa == NO_PPA) {
 				read_before_write++;
-				Total_write++;
+				//Total_write++;
 				//PRINT_MESSAGE("NO PPA, create write for read: ");
 				ppa = online_create_entry_for_reads(transaction->LPA, streamID, transaction->Address, ((NVM_Transaction_Flash_RD*)transaction)->read_sectors_bitmap);
 			}
@@ -1720,16 +1729,16 @@ namespace SSD_Components
 			default:
 				PRINT_ERROR("Unknown plane allocation scheme type!")
 		}
-		PPA_type ppa = Convert_address_to_ppa(read_address);
 
-		//** Append for CAFTL
+		PPA_type ppa = Convert_address_to_ppa(read_address);
+		//**Append for CAFTL
 		//(1)hash table initialization (2)PPN->VPN (3)VPN-to-PPN mapping
 		bool PPA_invalid = false;
 		bool use_SMT = false;
 		ChunkInfo cur_chunk;
 		std::pair<FP_type, ChunkInfo> FP_entry;
 		VPA_type VPA = NO_PPA;
-	
+
 		if (!domain->fp_input_file.is_open())
 			PRINT_ERROR("Fail to open fingerprint input!");
 		if (std::getline(domain->fp_input_file, domain->cur_fp)) {//Make sure that fingerprints are sufficient for full page write trace
@@ -1740,7 +1749,7 @@ namespace SSD_Components
 				domain->Total_write_time += page_write_latency;
 				ppa = Convert_address_to_ppa(read_address);
 				cur_chunk = { ppa, 1 };//Insert first chunk of this entry of hash table
-				
+
 				//block_manager->Program_transaction_serviced(read_address);
 			}
 			else {//Found duplication
@@ -1749,38 +1758,37 @@ namespace SSD_Components
 				PPA_type PPA = domain->deduplicator->GetChunkInfo(domain->cur_fp).PPA;//Get original PPA from FP table
 				cur_chunk = { PPA, new_ref };//Update the chunk info to be inserted into hash table
 				VPA = PPA ^ (1ULL << (63));//Convert PPA to VPA
-				if (new_ref == 2 && ReverseMapping[PPA].use_SMT == false) {//Convert PPA-to-VPA and change previous LPA-to-PPA mapping to LPA-to-VPA	
+				if (new_ref == 2 && ReverseMapping[PPA].use_SMT == false) {//Convert PPA-to-VPA and change previous LPA-to-PPA mapping to LPA-to-VPA
 					LPA_type old_lpa = ReverseMapping[PPA].LPA;
 					domain->Update_mapping_info(ideal_mapping_table, stream_id, old_lpa, VPA, domain->Get_page_status(ideal_mapping_table, stream_id, old_lpa));
 				}
 				domain->deduplicator->Dup_chunk_no++;
-				
+
 			}
 
 			FP_entry = { domain->cur_fp, cur_chunk };
 			domain->deduplicator->Update_FPtable(FP_entry);//If this FP entry already exists deduplicator will update ref and physical address, or it will directly insert into hash table.
 
-			/* Update mapping */
-			if (use_SMT) {
-				domain->Update_mapping_info(ideal_mapping_table, stream_id, lpa, VPA, read_sectors_bitmap);//Map current LPA to VPA
-				SMTEntryType cur_SMTEntry = { domain->deduplicator->GetChunkInfo(domain->cur_fp).PPA };
-				std::pair<VPA_type, SMTEntryType> cur_SMTpair(VPA, cur_SMTEntry);
-				if (In_SMT(VPA))
-					SecondaryMappingTable.erase(VPA);
-				SecondaryMappingTable.insert(cur_SMTpair);
-			}
-			else
-				domain->Update_mapping_info(ideal_mapping_table, stream_id, lpa, cur_chunk.PPA, read_sectors_bitmap);
+			
+		if (use_SMT) {
+			domain->Update_mapping_info(ideal_mapping_table, stream_id, lpa, VPA, read_sectors_bitmap);//Map current LPA to VPA
+			SMTEntryType cur_SMTEntry = { domain->deduplicator->GetChunkInfo(domain->cur_fp).PPA };
+			std::pair<VPA_type, SMTEntryType> cur_SMTpair(VPA, cur_SMTEntry);
+			if (In_SMT(VPA))
+				SecondaryMappingTable.erase(VPA);
+			SecondaryMappingTable.insert(cur_SMTpair);
+		}
+		else
+			domain->Update_mapping_info(ideal_mapping_table, stream_id, lpa, cur_chunk.PPA, read_sectors_bitmap);
 
-			/* Update Reverse Mapping */
-			RMEntryType RMEntry = { domain->cur_fp, lpa, VPA, use_SMT , true };
-			std::pair<PPA_type, RMEntryType> cur_RMEntry(cur_chunk.PPA, RMEntry);
-			Update_ReverseMapping(cur_RMEntry);
-			/* Show information */
-			//domain->Print_Mappings_Detail();
-			domain->deduplicator->Total_chunk_no++;
-			//PlaneBookKeepingType *plane_record = &block_manager->plane_manager[transaction->Address.ChannelID][transaction->Address.ChipID][transaction->Address.DieID][transaction->Address.PlaneID];
-			//block_manager->gc_and_wl_unit->Check_gc_required(plane_record->Get_free_block_pool_size(), transaction->Address);
+		
+		RMEntryType RMEntry = { domain->cur_fp, lpa, VPA, use_SMT , true };
+		std::pair<PPA_type, RMEntryType> cur_RMEntry(cur_chunk.PPA, RMEntry);
+		Update_ReverseMapping(cur_RMEntry);
+		//domain->Print_Mappings_Detail();
+		domain->deduplicator->Total_chunk_no++;
+		//PlaneBookKeepingType *plane_record = &block_manager->plane_manager[transaction->Address.ChannelID][transaction->Address.ChipID][transaction->Address.DieID][transaction->Address.PlaneID];
+		//block_manager->gc_and_wl_unit->Check_gc_required(plane_record->Get_free_block_pool_size(), transaction->Address);
 		}
 		else {
 			return ppa;//Run out of fingerprints
