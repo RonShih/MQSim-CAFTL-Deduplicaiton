@@ -225,7 +225,7 @@ namespace SSD_Components
 		//** Append for CAFTL
 		deduplicator = new Deduplicator();
 
-		FP_type fp_input_file_path = "C:\\Users\\Ron\\Desktop\\page_fp_output.txt";
+		FP_type fp_input_file_path = "C:\\Users\\Ron\\Desktop\\fp_4k.txt";
 		fp_input_file.open(fp_input_file_path);//** append
 		Total_fp_no = 0;
 		while (std::getline(fp_input_file, cur_fp))
