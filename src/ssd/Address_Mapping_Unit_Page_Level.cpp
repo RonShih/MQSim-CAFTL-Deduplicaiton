@@ -225,7 +225,7 @@ namespace SSD_Components
 		//** Append for CAFTL
 		deduplicator = new Deduplicator();
 
-		FP_type fp_input_file_path = "C:\\Users\\Ron\\Desktop\\fp_4k.txt";
+		FP_type fp_input_file_path = "C:\\Users\\USER\\Desktop\\fp_4k.txt";
 		fp_input_file.open(fp_input_file_path);//** append
 		Total_fp_no = 0;
 		while (std::getline(fp_input_file, cur_fp))
@@ -1241,6 +1241,9 @@ namespace SSD_Components
 		ChunkInfo cur_chunk;
 		std::pair<FP_type, ChunkInfo> FP_entry;
 		VPA_type VPA = NO_PPA;
+		if (transaction->LPA == 113394)
+			PRINT_MESSAGE("here");
+
 		if (is_for_gc) {//GC for CAFTL
 			if (In_SMT(old_ppa))
 				old_ppa = Get_SMTEntry(old_ppa).PPA;
@@ -1290,6 +1293,7 @@ namespace SSD_Components
 			domain->Total_write_time += page_write_latency;
 		}
 		else {//Its full page write and not GC
+			//bool no_invalid = false;
 			if (old_ppa != NO_PPA) {
 				if (In_SMT(old_ppa))//If this ppa is converted into vpa already
 					old_ppa = Get_SMTEntry(old_ppa).PPA;//fetch ppa but not vpa
@@ -1348,7 +1352,10 @@ namespace SSD_Components
 					VPA = PPA ^ (1ULL << (63));//Convert PPA to VPA
 					if (new_ref == 2 && ReverseMapping[PPA].use_SMT == false) {//Convert PPA-to-VPA and change previous LPA-to-PPA mapping to LPA-to-VPA
 						LPA_type old_lpa = ReverseMapping[PPA].LPA;
+						if (old_lpa == 113394)
+							PRINT_MESSAGE("here");
 						domain->Update_mapping_info(ideal_mapping_table, transaction->Stream_id, old_lpa, VPA, domain->Get_page_status(ideal_mapping_table, transaction->Stream_id, old_lpa));
+						ReverseMapping[PPA].use_SMT = true;
 					}
 					domain->deduplicator->Dup_chunk_no++;
 				}
@@ -1467,7 +1474,7 @@ namespace SSD_Components
 		{
 			PRINT_MESSAGE(VPA);
 			Print_SMT();
-			Print_ReverseMapping();
+			//Print_ReverseMapping();
 			PRINT_ERROR("This VPA is not in SMT")
 		}
 		else return got->second;
@@ -1801,8 +1808,7 @@ namespace SSD_Components
 	{
 		if (domains[stream_id]->Mapping_entry_accessible(ideal_mapping_table, stream_id, lpa)) {
 			ppa = domains[stream_id]->Get_ppa(ideal_mapping_table, stream_id, lpa);
-			if (In_SMT(ppa))
-			{
+			if (In_SMT(ppa)){
 				VPA_type vpa = ppa;
 				ppa = Get_SMTEntry(vpa).PPA;
 			}
@@ -2201,24 +2207,27 @@ namespace SSD_Components
 					}
 				}
 				else {
-					//LPA_type lpa = flash_controller->Get_metadata(addr.ChannelID, addr.ChipID, addr.DieID, addr.PlaneID, addr.BlockID, addr.PageID);
-					
+					//LPA_type lpa = flash_controller->Get_metadata(addr.ChannelID, addr.ChipID, addr.DieID, addr.PlaneID, addr.BlockID, addr.PageID);		
 					//** Append for CAFTL
 					RMEntryType metadata;
 					PPA_type ppa = Convert_address_to_ppa(addr);
-					Get_metadata_from_ReverseMapping(ppa, metadata);
-					
-					LPA_type lpa = metadata.LPA;
-					
-					if (metadata.use_SMT == true)
-					{ 
+					Get_metadata_from_ReverseMapping(ppa, metadata);	
+					LPA_type lpa = metadata.LPA;					
+				
+					/* Reasons that we don't check mapping consistency here
+					1. lpa unmaps from old page, and this page got ref by others lpa, but RM only stores this lpa (CAFTL design)
+					2. lpa maps to new page, and RM stores this lpa
 
+					//code
+					ppa = domains[block->Stream_id]->GlobalMappingTable[lpa].PPA;
+					if (In_SMT(ppa)) {
 						VPA_type VPA = domains[block->Stream_id]->GlobalMappingTable[lpa].PPA;
 						ppa = Get_SMTEntry(VPA).PPA;
 					}
 					else {
 						ppa = domains[block->Stream_id]->GlobalMappingTable[lpa].PPA;
 					}
+					*/
 
 					if (domains[block->Stream_id]->CMT->Exists(block->Stream_id, lpa)) {
 						ppa = domains[block->Stream_id]->CMT->Retrieve_ppa(block->Stream_id, lpa);

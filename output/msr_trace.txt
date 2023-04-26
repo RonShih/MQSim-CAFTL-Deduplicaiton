@@ -1,0 +1,107 @@
+MQSim started at Mon Apr 24 02:08:22 2023
+
+******************************
+Executing scenario 1 out of 1 .......
+Investigating input trace file: ./traces/MSR_trace.txt
+Trace file: ./traces/MSR_trace.txt seems healthy
+[>                   ]  0% progress in Host.IO_Flow.Trace../traces/MSR_trace.txt
+
+[=>                  ]  5% progress in Host.IO_Flow.Trace../traces/MSR_trace.txt
+
+[==>                 ]  10% progress in Host.IO_Flow.Trace../traces/MSR_trace.txt
+
+[===>                ]  15% progress in Host.IO_Flow.Trace../traces/MSR_trace.txt
+
+[====>               ]  20% progress in Host.IO_Flow.Trace../traces/MSR_trace.txt
+
+[=====>              ]  25% progress in Host.IO_Flow.Trace../traces/MSR_trace.txt
+
+[======>             ]  30% progress in Host.IO_Flow.Trace../traces/MSR_trace.txt
+
+[=======>            ]  35% progress in Host.IO_Flow.Trace../traces/MSR_trace.txt
+
+[========>           ]  40% progress in Host.IO_Flow.Trace../traces/MSR_trace.txt
+
+[=========>          ]  45% progress in Host.IO_Flow.Trace../traces/MSR_trace.txt
+
+[==========>         ]  50% progress in Host.IO_Flow.Trace../traces/MSR_trace.txt
+
+[===========>        ]  55% progress in Host.IO_Flow.Trace../traces/MSR_trace.txt
+
+[============>       ]  60% progress in Host.IO_Flow.Trace../traces/MSR_trace.txt
+
+[=============>      ]  65% progress in Host.IO_Flow.Trace../traces/MSR_trace.txt
+
+[==============>     ]  70% progress in Host.IO_Flow.Trace../traces/MSR_trace.txt
+
+[===============>    ]  75% progress in Host.IO_Flow.Trace../traces/MSR_trace.txt
+
+[================>   ]  80% progress in Host.IO_Flow.Trace../traces/MSR_trace.txt
+
+[=================>  ]  85% progress in Host.IO_Flow.Trace../traces/MSR_trace.txt
+
+[==================> ]  90% progress in Host.IO_Flow.Trace../traces/MSR_trace.txt
+
+[===================>]  95% progress in Host.IO_Flow.Trace../traces/MSR_trace.txt
+
+MQSim finished at Mon Apr 24 02:10:16 2023
+
+Total simulation time: 0:1:54
+
+Writing results to output file .......
+Flow Host.IO_Flow.Trace../traces/MSR_trace.txt - total requests generated: 609311 total requests serviced:609285
+                   - device response time: 12638042 (us) end-to-end request delay:171761187 (us)
+pcie_msg_to_host_num: 1827895
+pcie_msg_to_device_num: 1856322
+
+================ NVMe request to host related output ================
+read_pcie_msg_num: 637726
+write_pcie_msg_num: 1190169
+In write req:
+        NVMe_consume_io_request OOR: 580884
+        NVMe_consume_io_request: 609285
+
+============ Flash_Block_Manager Output ============
+Total blocks: 4096
+Total erase count: 0
+Total gc page write: 0
+
+============== Dedup Output: =======================
+* Setting:
+Page size (chunking size): 4096
+Total physical pages no: 2097152
+Flash space (GB): 8
+Total fingerprints num: 2319013
+Write latency: 200
+Read latency: 25
+FP latency: 6.4
+
+* Page I/O:
+Total read tr: 2491755
+ - Stats: Issued_Flash_Read_CMD: 2496200
+ - Read before Write num: 47959
+Total write tr: 154116
+ - Write no in chunks (without dedup): 202075
+ - Write no in chunks (after dedup): 202026
+ - Stats: Issued_Flash_Program_CMD (Excluding RBW): 154071
+ - Dedup Rate: 0.0242484%
+
+* GC:
+Stats: Total gc executions (from STATs): 0
+Stats: GC page write: 0
+
+* Page I/O with GC:
+Total pages write num (including GC write): 202075
+Actual pages write num (including GC write): 202026
+
+* I/O Performance:
+Total write path latency (microsec) : 4.17152e+07
+Total read path latency: 6.04732e+07
+Avg write path latency: 206.434
+ - Longest write latency: 206.4
+Avg read path latency: 24.2693
+
+* Trace Related Info:
+LBA read: 17341377
+LBA write: 1134437
+Simulation complete; Press any key to exit.
