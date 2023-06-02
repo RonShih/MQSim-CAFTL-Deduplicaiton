@@ -225,7 +225,7 @@ namespace SSD_Components
 		//** Append for CAFTL
 		deduplicator = new Deduplicator();
 
-		FP_type fp_input_file_path = "C:\\Users\\USER\\Desktop\\fp_4k.txt";
+		FP_type fp_input_file_path = "C:\\Users\\Ron\\Desktop\\FPoutput\\linux_fp_4KB.txt";
 		fp_input_file.open(fp_input_file_path);//** append
 		Total_fp_no = 0;
 		while (std::getline(fp_input_file, cur_fp))
@@ -428,10 +428,6 @@ namespace SSD_Components
 			PRINT_MESSAGE("Page size (chunking size): " << page_size_in_byte);
 			PRINT_MESSAGE("Total physical pages no: " << total_physical_pages_no);
 			PRINT_MESSAGE("Flash space (GB): " << float((page_size_in_byte / 1024.0) * total_physical_pages_no / 1024.0 / 1024.0));
-			PRINT_MESSAGE("Total fingerprints num: " << domains[i]->Total_fp_no);
-			PRINT_MESSAGE("Write latency: " << page_write_latency);
-			PRINT_MESSAGE("Read latency: " << page_read_latency);
-			PRINT_MESSAGE("FP latency: " << page_FP_latency);
 			
 			PRINT_MESSAGE("\n* Page I/O:");
 			PRINT_MESSAGE("Total read tr: " << Total_read);
@@ -453,11 +449,9 @@ namespace SSD_Components
 			PRINT_MESSAGE("Actual pages write num (including GC write): " << domains[i]->deduplicator->Total_chunk_no - domains[i]->deduplicator->Dup_chunk_no + domains[i]->GC_page_write_no);
 			
 			PRINT_MESSAGE("\n* I/O Performance:");
-			PRINT_MESSAGE("Total write path latency (microsec) : " << domains[i]->Total_write_time);
-			PRINT_MESSAGE("Total read path latency: " << domains[i]->Total_read_time);
-			PRINT_MESSAGE("Avg write path latency: " << domains[i]->Total_write_time / (float)(Total_write + read_before_write));
-			PRINT_MESSAGE(" - Longest write latency: " << page_write_latency + page_FP_latency);
-			PRINT_MESSAGE("Avg read path latency: " << domains[i]->Total_read_time / (float)Total_read);
+			PRINT_MESSAGE("Done page FP #: " << domains[i]->deduplicator->Total_chunk_no);
+			PRINT_MESSAGE("Total Write  #: " << Stats::IssuedProgramCMD);
+			PRINT_MESSAGE("Total Read   #: " << Stats::IssuedReadCMD);
 			
 			//std::cout << "GC partial pages write: " << domains[i]->GC_Partial_write_page_no << std::endl;
 			//domains[i]->Print_Mappings_Detail();
