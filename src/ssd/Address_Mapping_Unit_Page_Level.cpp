@@ -225,7 +225,7 @@ namespace SSD_Components
 		//** Append for CAFTL
 		deduplicator = new Deduplicator();
 
-		FP_type fp_input_file_path = "C:\\Users\\Ron\\Desktop\\FPoutput\\linux_fp_4KB.txt";
+		FP_type fp_input_file_path = "C:\\Users\\User\\Desktop\\FPoutput\\linux_fp_4KB.txt";
 		fp_input_file.open(fp_input_file_path);//** append
 		Total_fp_no = 0;
 		while (std::getline(fp_input_file, cur_fp))
@@ -1731,6 +1731,7 @@ namespace SSD_Components
 				PRINT_ERROR("Unknown plane allocation scheme type!")
 		}
 
+		/*
 		PPA_type ppa = Convert_address_to_ppa(read_address);
 		//**Append for CAFTL
 		//(1)hash table initialization (2)PPN->VPN (3)VPN-to-PPN mapping
@@ -1796,6 +1797,8 @@ namespace SSD_Components
 		};
 
 		return cur_chunk.PPA;
+		*/
+		return 0; //Force rbw case to read specific PPA. These writes in rbw will be appended in modified trace.
 	}
 
 	inline void Address_Mapping_Unit_Page_Level::Get_data_mapping_info_for_gc(const stream_id_type stream_id, const LPA_type lpa, PPA_type& ppa, page_status_type& page_state)

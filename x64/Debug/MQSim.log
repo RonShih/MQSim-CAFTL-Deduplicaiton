@@ -1,1 +1,3 @@
-﻿  MQSim.vcxproj -> C:\Users\USER\Documents\GitHub\MQSim_CAFTL\x64\Debug\MQSim.exe
+﻿  Address_Mapping_Unit_Page_Level.cpp
+c:\users\user\documents\github\mqsim_caftl\src\ssd\address_mapping_unit_page_level.h(100): warning C4305: '正在初始化': 從 'double' 轉換為 'float'，是由較大的類型轉換為較小的類型，可能導致資料遺失
+  MQSim.vcxproj -> C:\Users\USER\Documents\GitHub\MQSim_CAFTL\x64\Debug\MQSim.exe
