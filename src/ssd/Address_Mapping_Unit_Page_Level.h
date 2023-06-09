@@ -60,7 +60,7 @@ namespace SSD_Components
 		LPA_type LPA;
 		VPA_type VPA;
 		bool use_SMT;//For unique chunk but using two-level mapping (ref decreases to 1)
-		bool is_full_page;//Distinguish if its full write or partial write
+		bool status;
 	};
 
 	class Deduplicator//** Append for CAFTL
@@ -209,6 +209,8 @@ namespace SSD_Components
 
 		float Total_write_time;//** latency with FPing
 		float Total_read_time;
+
+		std::ofstream DedupOutputFile;
 	};
 
 	class Address_Mapping_Unit_Page_Level : public Address_Mapping_Unit_Base

@@ -225,7 +225,7 @@ namespace SSD_Components
 		//** Append for CAFTL
 		deduplicator = new Deduplicator();
 
-		FP_type fp_input_file_path = "C:\\Users\\Ron\\Desktop\\FPoutput\\linux_fp_4KB.txt";
+		FP_type fp_input_file_path = "C:\\Users\\Ron\\Desktop\\FPoutput\\powertoy\\fp_16k.txt";
 		fp_input_file.open(fp_input_file_path);//** append
 		Total_fp_no = 0;
 		while (std::getline(fp_input_file, cur_fp))
@@ -240,6 +240,26 @@ namespace SSD_Components
 
 	AddressMappingDomain::~AddressMappingDomain()
 	{
+		size_t PMT_num = 0;
+		size_t SMT_num = 0;
+		size_t RM_num = 0;
+		size_t invalid_page_num = 0;
+
+		for (size_t lbaidx = 0; lbaidx < Total_logical_pages_no; lbaidx++)
+			if (GlobalMappingTable[lbaidx].PPA != NO_PPA)
+				PMT_num++;
+		for (const auto &entry : SecondaryMappingTable)
+			SMT_num++;
+		for (const auto &entry : ReverseMapping) {
+			RM_num++;
+			if (entry.second.status)
+				invalid_page_num++;
+		}
+
+		DedupOutputFile << "PMT#" << "," << "SMT#" << "," << "RM#" << "," << "Invalid page#" << std::endl;
+		DedupOutputFile << PMT_num << "," << SMT_num << "," << RM_num << "," << invalid_page_num << std::endl;
+		DedupOutputFile.close();
+
 		delete CMT;
 		delete[] GlobalMappingTable;
 		delete[] GlobalTranslationDirectory;
@@ -452,6 +472,10 @@ namespace SSD_Components
 			PRINT_MESSAGE("Done page FP #: " << domains[i]->deduplicator->Total_chunk_no);
 			PRINT_MESSAGE("Total Write  #: " << Stats::IssuedProgramCMD);
 			PRINT_MESSAGE("Total Read   #: " << Stats::IssuedReadCMD);
+			
+			domains[i]->DedupOutputFile.open("DedupOutput.csv", std::ios::out | std::ios::trunc);
+			domains[i]->DedupOutputFile << "Flash space" << "," << "page size" << "," << "DedupRate" << "," << std::endl;
+			domains[i]->DedupOutputFile << std::to_string(float((page_size_in_byte / 1024.0) * total_physical_pages_no / 1024.0 / 1024.0)) + "GB" << "," << std::to_string(page_size_in_byte) << "," << std::to_string(domains[i]->deduplicator->Get_DedupRate() * 100.0) + "%" << "," << std::endl;
 			
 			//std::cout << "GC partial pages write: " << domains[i]->GC_Partial_write_page_no << std::endl;
 			//domains[i]->Print_Mappings_Detail();
@@ -1235,8 +1259,6 @@ namespace SSD_Components
 		ChunkInfo cur_chunk;
 		std::pair<FP_type, ChunkInfo> FP_entry;
 		VPA_type VPA = NO_PPA;
-		if (transaction->LPA == 113394)
-			PRINT_MESSAGE("here");
 
 		if (is_for_gc) {//GC for CAFTL
 			if (In_SMT(old_ppa))
@@ -1279,12 +1301,11 @@ namespace SSD_Components
 			}
 
 			/*3. Update Reverse Mapping for new location*/
-			RMEntryType RMEntry = { metadata.FP, metadata.LPA, metadata.VPA, metadata.use_SMT, true};
+			RMEntryType RMEntry = { metadata.FP, metadata.LPA, metadata.VPA, metadata.use_SMT, false};
 			std::pair<PPA_type, RMEntryType> cur_RMEntry(transaction->PPA, RMEntry);
 			Update_ReverseMapping(cur_RMEntry);
 			//domain->Delete_ReverseMapping(old_ppa);
 			domain->GC_page_write_no++;
-			domain->Total_write_time += page_write_latency;
 		}
 		else {//Its full page write and not GC
 			//bool no_invalid = false;
@@ -1303,10 +1324,17 @@ namespace SSD_Components
 				{
 					page_status_type prev_page_status = domain->Get_page_status(ideal_mapping_table, transaction->Stream_id, transaction->LPA);
 					page_status_type status_intersection = transaction->write_sectors_bitmap & prev_page_status;
+
+					RMEntryType metadata;
+					Get_metadata_from_ReverseMapping(old_ppa, metadata);
+					RMEntryType RMEntry = { metadata.FP, metadata.LPA, metadata.VPA, metadata.use_SMT, true };
+					std::pair<PPA_type, RMEntryType> cur_RMEntry(transaction->PPA, RMEntry);
+
 					//check if an update read is required
 					if (status_intersection == prev_page_status) {
 						NVM::FlashMemory::Physical_Page_Address addr;
 						Convert_ppa_to_address(old_ppa, addr);
+						Update_ReverseMapping(cur_RMEntry);
 						block_manager->Invalidate_page_in_block(transaction->Stream_id, addr);
 					}
 					else {
@@ -1315,6 +1343,7 @@ namespace SSD_Components
 							count_sector_no_from_status_bitmap(read_pages_bitmap) * SECTOR_SIZE_IN_BYTE, transaction->LPA, old_ppa, transaction->UserIORequest,
 							transaction->Content, transaction, read_pages_bitmap, domain->GlobalMappingTable[transaction->LPA].TimeStamp);
 						Convert_ppa_to_address(old_ppa, update_read_tr->Address);
+						Update_ReverseMapping(cur_RMEntry);
 						block_manager->Read_transaction_issued(update_read_tr->Address);//Inform block manager about a new transaction as soon as the transaction's target address is determined
 						block_manager->Invalidate_page_in_block(transaction->Stream_id, update_read_tr->Address);
 						transaction->RelatedRead = update_read_tr;
@@ -1374,7 +1403,7 @@ namespace SSD_Components
 
 					
 				/* Update Reverse Mapping */
-				RMEntryType RMEntry = { domain->cur_fp, transaction->LPA, VPA, use_SMT , true};
+				RMEntryType RMEntry = { domain->cur_fp, transaction->LPA, VPA, use_SMT , false};
 				std::pair<PPA_type, RMEntryType> cur_RMEntry(cur_chunk.PPA, RMEntry);
 				Update_ReverseMapping(cur_RMEntry);
 				//PlaneBookKeepingType *plane_record = &block_manager->plane_manager[transaction->Address.ChannelID][transaction->Address.ChipID][transaction->Address.DieID][transaction->Address.PlaneID];
@@ -1480,7 +1509,7 @@ namespace SSD_Components
 		if (ReverseMapping.size() == 0)
 			std::cout << "(Empty)\n";
 		for (const auto &entry : ReverseMapping) {
-			std::cout << "{PPN: " << std::setw(8) << entry.first << ", FP: " << entry.second.FP << ", LPA: "<< entry.second.LPA << ", VPA: " << entry.second.VPA << ", use_SMT: " << entry.second.use_SMT << ", is_full_page: " << entry.second.is_full_page << "}\n";
+			std::cout << "{PPN: " << std::setw(8) << entry.first << ", FP: " << entry.second.FP << ", LPA: "<< entry.second.LPA << ", VPA: " << entry.second.VPA << ", use_SMT: " << entry.second.use_SMT << "}\n";
 		}
 	}
 
@@ -1495,7 +1524,8 @@ namespace SSD_Components
 		{
 			got->second.FP = cur_rev_pair.second.FP;
 			got->second.use_SMT = cur_rev_pair.second.use_SMT;
-			got->second.is_full_page = cur_rev_pair.second.is_full_page;
+			got->second.status = cur_rev_pair.second.status;
+
 			if (cur_rev_pair.second.use_SMT == true)
 				got->second.VPA = cur_rev_pair.second.VPA;
 			else
@@ -1526,7 +1556,7 @@ namespace SSD_Components
 		metadata.LPA = got->second.LPA;
 		metadata.VPA = got->second.VPA;
 		metadata.use_SMT = got->second.use_SMT;
-		metadata.is_full_page = got->second.is_full_page;
+		metadata.status = got->second.status;
 	}
 
 	void Get_LPA_from_ReverseMapping(const PPA_type &target_ppa, LPA_type &LPA)
@@ -1783,7 +1813,7 @@ namespace SSD_Components
 			domain->Update_mapping_info(ideal_mapping_table, stream_id, lpa, cur_chunk.PPA, read_sectors_bitmap);
 
 		
-		RMEntryType RMEntry = { domain->cur_fp, lpa, VPA, use_SMT , true };
+		RMEntryType RMEntry = { domain->cur_fp, lpa, VPA, use_SMT , false };
 		std::pair<PPA_type, RMEntryType> cur_RMEntry(cur_chunk.PPA, RMEntry);
 		Update_ReverseMapping(cur_RMEntry);
 		//domain->Print_Mappings_Detail();
