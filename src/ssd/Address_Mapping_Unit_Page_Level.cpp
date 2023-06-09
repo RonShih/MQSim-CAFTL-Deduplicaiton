@@ -225,7 +225,7 @@ namespace SSD_Components
 		//** Append for CAFTL
 		deduplicator = new Deduplicator();
 
-		FP_type fp_input_file_path = "C:\\Users\\Ron\\Desktop\\FPoutput\\powertoy\\fp_16k.txt";
+		FP_type fp_input_file_path = "C:\\Users\\Ron\\Desktop\\FPoutput\\powertoy\\fp_4k.txt";
 		fp_input_file.open(fp_input_file_path);//** append
 		Total_fp_no = 0;
 		while (std::getline(fp_input_file, cur_fp))
@@ -473,9 +473,9 @@ namespace SSD_Components
 			PRINT_MESSAGE("Total Write  #: " << Stats::IssuedProgramCMD);
 			PRINT_MESSAGE("Total Read   #: " << Stats::IssuedReadCMD);
 			
-			domains[i]->DedupOutputFile.open("DedupOutput.csv", std::ios::out | std::ios::trunc);
-			domains[i]->DedupOutputFile << "Flash space" << "," << "page size" << "," << "DedupRate" << "," << std::endl;
-			domains[i]->DedupOutputFile << std::to_string(float((page_size_in_byte / 1024.0) * total_physical_pages_no / 1024.0 / 1024.0)) + "GB" << "," << std::to_string(page_size_in_byte) << "," << std::to_string(domains[i]->deduplicator->Get_DedupRate() * 100.0) + "%" << "," << std::endl;
+			domains[i]->DedupOutputFile.open("CAFTL_4K_powertoy_ssdTrace.csv", std::ios::out | std::ios::trunc);
+			domains[i]->DedupOutputFile << "Flash space" << "," << "page size" << "," << "DedupRate" << "," << "Total_write#" << "," << "Total_read#" << std::endl;
+			domains[i]->DedupOutputFile << std::to_string(float((page_size_in_byte / 1024.0) * total_physical_pages_no / 1024.0 / 1024.0)) + "GB" << "," << std::to_string(page_size_in_byte) << "," << std::to_string(domains[i]->deduplicator->Get_DedupRate() * 100.0) + "%" << "," << Stats::IssuedProgramCMD << "," << Stats::IssuedReadCMD << std::endl;
 			
 			//std::cout << "GC partial pages write: " << domains[i]->GC_Partial_write_page_no << std::endl;
 			//domains[i]->Print_Mappings_Detail();
@@ -1328,7 +1328,7 @@ namespace SSD_Components
 					RMEntryType metadata;
 					Get_metadata_from_ReverseMapping(old_ppa, metadata);
 					RMEntryType RMEntry = { metadata.FP, metadata.LPA, metadata.VPA, metadata.use_SMT, true };
-					std::pair<PPA_type, RMEntryType> cur_RMEntry(transaction->PPA, RMEntry);
+					std::pair<PPA_type, RMEntryType> cur_RMEntry(old_ppa, RMEntry);
 
 					//check if an update read is required
 					if (status_intersection == prev_page_status) {
@@ -1760,7 +1760,7 @@ namespace SSD_Components
 			default:
 				PRINT_ERROR("Unknown plane allocation scheme type!")
 		}
-
+		/*
 		PPA_type ppa = Convert_address_to_ppa(read_address);
 		//**Append for CAFTL
 		//(1)hash table initialization (2)PPN->VPN (3)VPN-to-PPN mapping
@@ -1826,6 +1826,13 @@ namespace SSD_Components
 		};
 
 		return cur_chunk.PPA;
+		*/
+
+		for (const auto &entry : ReverseMapping) {
+			if (entry.second.status == false)
+				return entry.first;
+		}
+		return 0;
 	}
 
 	inline void Address_Mapping_Unit_Page_Level::Get_data_mapping_info_for_gc(const stream_id_type stream_id, const LPA_type lpa, PPA_type& ppa, page_status_type& page_state)

@@ -1,10 +1,4 @@
-Flash space,page size,DedupRate,
-<<<<<<< Updated upstream
-8.000000GB,4096,23.363838%,
+Flash space,page size,DedupRate,Total_write#,Total_read#
+8.000000GB,16384,13.777849%,211271,352592
 PMT#,SMT#,RM#,Invalid page#
-84310,29454,146806,1
-=======
-8.000000GB,16384,30.629721%,
-PMT#,SMT#,RM#,Invalid page#
-107322,39552,213624,1
->>>>>>> Stashed changes
+49477,19604,211271,167229
