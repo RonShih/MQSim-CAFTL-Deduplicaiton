@@ -1,0 +1,4 @@
+Flash space,page size,DedupRate,Total_write#,Total_read#
+8.000000GB,32768,6.281581%,117775,300371
+PMT#,SMT#,RM#,Invalid page#
+24748,6818,117775,94267

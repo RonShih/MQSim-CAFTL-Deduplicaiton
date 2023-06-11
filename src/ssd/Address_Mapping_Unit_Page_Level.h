@@ -73,6 +73,7 @@ namespace SSD_Components
 		bool In_FPtable(const FP_type &FP);//** Check if this FP exists in hash table
 		ChunkInfo GetChunkInfo(const FP_type &FP);
 		float Get_DedupRate();
+		size_t Get_FPtable_size();
 
 		size_t Total_chunk_no;//total chunk(page), including unique and deduped chunks
 		size_t Dup_chunk_no;//discarded chunks

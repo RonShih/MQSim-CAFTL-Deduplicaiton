@@ -225,7 +225,7 @@ namespace SSD_Components
 		//** Append for CAFTL
 		deduplicator = new Deduplicator();
 
-		FP_type fp_input_file_path = "C:\\Users\\Ron\\Desktop\\FPoutput\\powertoy\\fp_4k.txt";
+		FP_type fp_input_file_path = "C:\\Users\\Ron\\Desktop\\FPoutput\\powertoy\\fp_4K.txt";
 		fp_input_file.open(fp_input_file_path);//** append
 		Total_fp_no = 0;
 		while (std::getline(fp_input_file, cur_fp))
@@ -256,8 +256,8 @@ namespace SSD_Components
 				invalid_page_num++;
 		}
 
-		DedupOutputFile << "PMT#" << "," << "SMT#" << "," << "RM#" << "," << "Invalid page#" << std::endl;
-		DedupOutputFile << PMT_num << "," << SMT_num << "," << RM_num << "," << invalid_page_num << std::endl;
+		DedupOutputFile << "PMT#" << "," << "SMT#" << "," << "FP#" << "," << "RM#" << "," << "Invalid page#" << std::endl;
+		DedupOutputFile << PMT_num << "," << SecondaryMappingTable.size() << "," << deduplicator->Get_FPtable_size() << "," << ReverseMapping.size() << "," << invalid_page_num << std::endl;
 		DedupOutputFile.close();
 
 		delete CMT;
@@ -473,7 +473,7 @@ namespace SSD_Components
 			PRINT_MESSAGE("Total Write  #: " << Stats::IssuedProgramCMD);
 			PRINT_MESSAGE("Total Read   #: " << Stats::IssuedReadCMD);
 			
-			domains[i]->DedupOutputFile.open("CAFTL_4K_powertoy_ssdTrace.csv", std::ios::out | std::ios::trunc);
+			domains[i]->DedupOutputFile.open("C:\\Users\\Ron\\Desktop\\DedupOutput\\powertoy_4k_tensorflow_ssdTrace.csv", std::ios::out | std::ios::trunc);
 			domains[i]->DedupOutputFile << "Flash space" << "," << "page size" << "," << "DedupRate" << "," << "Total_write#" << "," << "Total_read#" << std::endl;
 			domains[i]->DedupOutputFile << std::to_string(float((page_size_in_byte / 1024.0) * total_physical_pages_no / 1024.0 / 1024.0)) + "GB" << "," << std::to_string(page_size_in_byte) << "," << std::to_string(domains[i]->deduplicator->Get_DedupRate() * 100.0) + "%" << "," << Stats::IssuedProgramCMD << "," << Stats::IssuedReadCMD << std::endl;
 			
@@ -1450,6 +1450,10 @@ namespace SSD_Components
 	float Deduplicator::Get_DedupRate()
 	{
 		return float (Dup_chunk_no) / (Total_chunk_no);
+	}
+	size_t Deduplicator::Get_FPtable_size() 
+	{
+		return FPtable.size();
 	}
 
 	ChunkInfo Deduplicator::GetChunkInfo(const FP_type &FP)
