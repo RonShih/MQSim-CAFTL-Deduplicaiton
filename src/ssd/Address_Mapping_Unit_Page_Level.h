@@ -102,6 +102,7 @@ namespace SSD_Components
 	const float page_write_latency = 200;
 	const float page_read_latency = 25;
 
+
 	class Cached_Mapping_Table
 	{
 	public:
@@ -120,10 +121,27 @@ namespace SSD_Components
 		
 		bool Is_dirty(const stream_id_type streamID, const LPA_type lpa);
 		void Make_clean(const stream_id_type streamID, const LPA_type lpa);
+
+		void Print_CMT() {//for observation
+			std::cout << "========== Print simple CMT =================\n";
+			for (auto const &pair : addressMap) {
+				std::cout << "{LPA: " << pair.first << ", PPA: " << pair.second->PPA << ", dirty: " << pair.second->Dirty << "}\n";
+			}
+		}
+
 	private:
 		std::unordered_map<LPA_type, CMTSlotType*> addressMap;
 		std::list<std::pair<LPA_type, CMTSlotType*>> lruList;
 		unsigned int capacity;
+	};
+
+	/* Create for simple observation*/
+	class Simple_Cached_Mapping_Table : public Cached_Mapping_Table
+	{
+	public:
+		//capacity: 2097152 bytes -> 2MB
+		Simple_Cached_Mapping_Table(size_t capacity) : Cached_Mapping_Table(capacity), GMT_write_count(0) {};
+		int GMT_write_count;
 	};
 
 	/* Each stream has its own address mapping domain. It helps isolation of GC interference
@@ -193,7 +211,8 @@ namespace SSD_Components
 
 		//** Append for CAFTL
 		Deduplicator *deduplicator;
-		
+		Simple_Cached_Mapping_Table *simpleCMT;
+
 		void Print_Mappings_Detail() {
 			deduplicator->Print_FPtable();
 			Print_PMT();
@@ -205,11 +224,9 @@ namespace SSD_Components
 		FP_type cur_fp;//** Record current fp
 		size_t Total_fp_no;//** Total number of fingerprints by trace
 
+
 		size_t Total_page_write_no;//** partial and full write, including GC write 
 		size_t GC_page_write_no;
-
-		float Total_write_time;//** latency with FPing
-		float Total_read_time;
 
 		std::ofstream DedupOutputFile;
 	};
@@ -257,6 +274,7 @@ namespace SSD_Components
 		//** Append for CAFTL
 		size_t Total_write;
 		size_t Total_read;
+		size_t update_read;
 		size_t read_before_write;
 	private:
 		static Address_Mapping_Unit_Page_Level* _my_instance;

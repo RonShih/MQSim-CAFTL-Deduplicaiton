@@ -224,8 +224,9 @@ namespace SSD_Components
 
 		//** Append for CAFTL
 		deduplicator = new Deduplicator();
+		simpleCMT = new Simple_Cached_Mapping_Table(cmt_capacity);
 
-		FP_type fp_input_file_path = "C:\\Users\\Ron\\Desktop\\FPoutput\\powertoy\\fp_4K.txt";
+		FP_type fp_input_file_path = "C:\\Users\\Ron\\Desktop\\FPoutput\\powertoy\\fp_16k.txt";
 		fp_input_file.open(fp_input_file_path);//** append
 		Total_fp_no = 0;
 		while (std::getline(fp_input_file, cur_fp))
@@ -234,8 +235,6 @@ namespace SSD_Components
 		fp_input_file.open(fp_input_file_path);
 		Total_page_write_no = 0;
 		GC_page_write_no = 0;
-		Total_write_time = 0;
-		Total_read_time = 0;
 	}
 
 	AddressMappingDomain::~AddressMappingDomain()
@@ -290,9 +289,14 @@ namespace SSD_Components
 	inline void AddressMappingDomain::Update_mapping_info(const bool ideal_mapping, const stream_id_type stream_id, const LPA_type lpa, const PPA_type ppa, const page_status_type page_status_bitmap)
 	{
 		if (ideal_mapping) {
+			if(simpleCMT->Exists(stream_id, lpa))
+				simpleCMT->Update_mapping_info(stream_id, lpa, ppa, page_status_bitmap);
+
 			GlobalMappingTable[lpa].PPA = ppa;
 			GlobalMappingTable[lpa].WrittenStateBitmap = page_status_bitmap;
 			GlobalMappingTable[lpa].TimeStamp = CurrentTimeStamp;
+
+			//simpleCMT->Print_CMT();
 		} else {
 			CMT->Update_mapping_info(stream_id, lpa, ppa, page_status_bitmap);
 		}
@@ -373,6 +377,7 @@ namespace SSD_Components
 
 			Cached_Mapping_Table* sharedCMT = NULL;
 			unsigned int per_stream_cmt_capacity = 0;
+			//PRINT_MESSAGE(CMT_entry_size);
 			cmt_capacity = cmt_capacity_in_byte / CMT_entry_size;
 			switch (sharing_mode) {
 				case CMT_Sharing_Mode::SHARED:
@@ -438,6 +443,7 @@ namespace SSD_Components
 		Total_write = 0;
 		Total_read = 0;
 		read_before_write = 0;
+		update_read = 0;
 	}
 
 	Address_Mapping_Unit_Page_Level::~Address_Mapping_Unit_Page_Level()
@@ -472,10 +478,13 @@ namespace SSD_Components
 			PRINT_MESSAGE("Done page FP #: " << domains[i]->deduplicator->Total_chunk_no);
 			PRINT_MESSAGE("Total Write  #: " << Stats::IssuedProgramCMD);
 			PRINT_MESSAGE("Total Read   #: " << Stats::IssuedReadCMD);
+			PRINT_MESSAGE("Update Read  #: " << update_read);
 			
-			domains[i]->DedupOutputFile.open("C:\\Users\\Ron\\Desktop\\DedupOutput\\powertoy_4k_tensorflow_ssdTrace.csv", std::ios::out | std::ios::trunc);
-			domains[i]->DedupOutputFile << "Flash space" << "," << "page size" << "," << "DedupRate" << "," << "Total_write#" << "," << "Total_read#" << std::endl;
-			domains[i]->DedupOutputFile << std::to_string(float((page_size_in_byte / 1024.0) * total_physical_pages_no / 1024.0 / 1024.0)) + "GB" << "," << std::to_string(page_size_in_byte) << "," << std::to_string(domains[i]->deduplicator->Get_DedupRate() * 100.0) + "%" << "," << Stats::IssuedProgramCMD << "," << Stats::IssuedReadCMD << std::endl;
+			PRINT_MESSAGE("\n* Cache Mapping:");
+			PRINT_MESSAGE("Simple CMT write triggers #: " << domains[i]->simpleCMT->GMT_write_count);
+			domains[i]->DedupOutputFile.open("C:\\Users\\Ron\\Desktop\\DedupOutput\\CAFTL_output.csv", std::ios::out | std::ios::app);
+			domains[i]->DedupOutputFile << "Flash space" << "," << "page size" << "," << "DedupRate" << "," << "Total_write#" << "GMT_write#" << "," << "Total_read#" << "," << "rbw#" << "," << "update read #" << "," << "ssdTrace" << "," << "Tensorflow" << "," << std::endl;
+			domains[i]->DedupOutputFile << std::to_string(float((page_size_in_byte / 1024.0) * total_physical_pages_no / 1024.0 / 1024.0)) + "GB" << "," << std::to_string(page_size_in_byte) << "," << std::to_string(domains[i]->deduplicator->Get_DedupRate() * 100.0) + "%" << "," << Stats::IssuedProgramCMD << "," << domains[i]->simpleCMT->GMT_write_count << "," << Stats::IssuedReadCMD << "," << read_before_write << "," << update_read << std::endl;
 			
 			//std::cout << "GC partial pages write: " << domains[i]->GC_Partial_write_page_no << std::endl;
 			//domains[i]->Print_Mappings_Detail();
@@ -569,8 +578,7 @@ namespace SSD_Components
 				//iterator should be post-incremented since the iterator may be deleted from list
 				manage_user_transaction_facing_barrier((NVM_Transaction_Flash*)*(it++));
 			} else {
-				query_cmt((NVM_Transaction_Flash*)(*it++));
-				
+				query_cmt((NVM_Transaction_Flash*)(*it++));	
 			}
 		}
 
@@ -672,11 +680,49 @@ namespace SSD_Components
 	{
 		AddressMappingDomain* domain = domains[streamID];
 		PPA_type ppa = domains[streamID]->Get_ppa(ideal_mapping_table, streamID, transaction->LPA);
+
+		/* ----------------------------Simple CMT eviction---------------------------------- */
+		/* Eviction starts, if simple CMT is full */
+		if (!domain->simpleCMT->Check_free_slot_availability()) {
+			LPA_type evicted_lpa;
+			CMTSlotType evictedItem = domain->simpleCMT->Evict_one_slot(evicted_lpa);
+			if (evictedItem.Dirty) {
+				domain->GlobalMappingTable[evicted_lpa].PPA = evictedItem.PPA;
+				domain->GlobalMappingTable[evicted_lpa].WrittenStateBitmap = evictedItem.WrittenStateBitmap;
+				if (domain->GlobalMappingTable[evicted_lpa].TimeStamp > CurrentTimeStamp)
+					throw std::logic_error("Unexpected situation occured in handling GMT!");
+				domain->GlobalMappingTable[evicted_lpa].TimeStamp = CurrentTimeStamp;
+
+				/*GMT write triggers when eviction happens and this entry is dirty*/
+				PRINT_MESSAGE("Dirty page write back: " << evicted_lpa);
+				domain->simpleCMT->GMT_write_count++;
+			}
+		}
+
+		if (ppa == NO_PPA) {
+			/* First time access */
+			if (transaction->Type == Transaction_Type::WRITE) {
+				/*If its a write, the entry will be marked as dirty later*/
+				/*For simplicity, we don't create a new entry for non-existed mapping (e.g., read before write)*/
+				domain->simpleCMT->Reserve_slot_for_lpn(streamID, transaction->LPA);
+				domain->simpleCMT->Insert_new_mapping_info(streamID, transaction->LPA, NO_PPA, UNWRITTEN_LOGICAL_PAGE);
+			}
+		}
+		else {
+			/* If its already in CMT, do nothing */
+			/* Same LPA won't exist in simpleCMT because it will be udpated later */
+			if (!domain->simpleCMT->Exists(streamID, transaction->LPA)) {
+				domain->simpleCMT->Reserve_slot_for_lpn(streamID, transaction->LPA);
+				domain->simpleCMT->Insert_new_mapping_info(streamID, transaction->LPA, ppa, domain->GlobalMappingTable[transaction->LPA].WrittenStateBitmap);
+			}
+		}
+
+		//domain->simpleCMT->Print_CMT();
+		/* ----------------------------------------------------------------------------------- */
+
 		if (transaction->Type == Transaction_Type::READ) {
 			if (ppa == NO_PPA) {
 				read_before_write++;
-				//Total_write++;
-				//PRINT_MESSAGE("NO PPA, create write for read: ");
 				ppa = online_create_entry_for_reads(transaction->LPA, streamID, transaction->Address, ((NVM_Transaction_Flash_RD*)transaction)->read_sectors_bitmap);
 			}
 			else{
@@ -688,7 +734,6 @@ namespace SSD_Components
 			Convert_ppa_to_address(transaction->PPA, transaction->Address);
 			block_manager->Read_transaction_issued(transaction->Address);
 			Total_read++;
-			domain->Total_read_time += page_read_latency;
 			transaction->Physical_address_determined = true;
 			return true;
 		} else {//This is a write transaction	
@@ -1345,6 +1390,7 @@ namespace SSD_Components
 						Convert_ppa_to_address(old_ppa, update_read_tr->Address);
 						Update_ReverseMapping(cur_RMEntry);
 						block_manager->Read_transaction_issued(update_read_tr->Address);//Inform block manager about a new transaction as soon as the transaction's target address is determined
+						update_read++;
 						block_manager->Invalidate_page_in_block(transaction->Stream_id, update_read_tr->Address);
 						transaction->RelatedRead = update_read_tr;
 					}
@@ -1352,7 +1398,6 @@ namespace SSD_Components
 			}
 
 			if (std::getline(domain->fp_input_file, domain->cur_fp)) {//Make sure that fingerprints are sufficient for full page write trace
-				domain->Total_write_time += page_FP_latency;
 				if (!domain->fp_input_file.is_open()){
 					PRINT_ERROR("Fail to open fingerprint input!");
 					return;
@@ -1361,7 +1406,6 @@ namespace SSD_Components
 				/* Dedup current FP */
 				if (!domain->deduplicator->In_FPtable(domain->cur_fp)) {//First time insertion
 					block_manager->Allocate_block_and_page_in_plane_for_user_write(transaction->Stream_id, transaction->Address);
-					domain->Total_write_time += page_write_latency;
 					transaction->PPA = Convert_address_to_ppa(transaction->Address);
 					cur_chunk = { transaction->PPA, 1 };//Insert first chunk of this entry of hash table
 				}
