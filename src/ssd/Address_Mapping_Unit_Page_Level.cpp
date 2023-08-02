@@ -226,7 +226,7 @@ namespace SSD_Components
 		deduplicator = new Deduplicator();
 		simpleCMT = new Simple_Cached_Mapping_Table(cmt_capacity);
 
-		FP_type fp_input_file_path = "C:\\Users\\Ron\\Desktop\\FPoutput\\powertoy\\fp_16k.txt";
+		FP_type fp_input_file_path = "C:\\Users\\Ron\\Desktop\\FPoutput\\linux\\fp_16k.txt";
 		fp_input_file.open(fp_input_file_path);//** append
 		Total_fp_no = 0;
 		while (std::getline(fp_input_file, cur_fp))
@@ -483,7 +483,7 @@ namespace SSD_Components
 			PRINT_MESSAGE("\n* Cache Mapping:");
 			PRINT_MESSAGE("Simple CMT write triggers #: " << domains[i]->simpleCMT->GMT_write_count);
 			domains[i]->DedupOutputFile.open("C:\\Users\\Ron\\Desktop\\DedupOutput\\CAFTL_output.csv", std::ios::out | std::ios::app);
-			domains[i]->DedupOutputFile << "Flash space" << "," << "page size" << "," << "DedupRate" << "," << "Total_write#" << "GMT_write#" << "," << "Total_read#" << "," << "rbw#" << "," << "update read #" << "," << "ssdTrace" << "," << "Tensorflow" << "," << std::endl;
+			domains[i]->DedupOutputFile << "Flash space" << "," << "page size" << "," << "DedupRate" << "," << "Total_write#" << "," << "GMT_write#" << "," << "Total_read#" << "," << "rbw#" << "," << "update read #" << "," << "ssdTrace" << "," << "Linux" << "," << std::endl;
 			domains[i]->DedupOutputFile << std::to_string(float((page_size_in_byte / 1024.0) * total_physical_pages_no / 1024.0 / 1024.0)) + "GB" << "," << std::to_string(page_size_in_byte) << "," << std::to_string(domains[i]->deduplicator->Get_DedupRate() * 100.0) + "%" << "," << Stats::IssuedProgramCMD << "," << domains[i]->simpleCMT->GMT_write_count << "," << Stats::IssuedReadCMD << "," << read_before_write << "," << update_read << std::endl;
 			
 			//std::cout << "GC partial pages write: " << domains[i]->GC_Partial_write_page_no << std::endl;
